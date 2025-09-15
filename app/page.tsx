@@ -72,15 +72,15 @@ export default function Home() {
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
               <Button
                 size="lg"
-                className="text-lg px-8 py-3"
-                onClick={() => router.push("/polls/create")}
+                className="text-lg px-8 py-3 cursor-pointer"
+                <Button onClick={() => router.push("/polls/create")} className="cursor-pointer">
               >
                 Create Your First Poll
               </Button>
               <Button
                 variant="outline"
                 size="lg"
-                className="text-lg px-8 py-3"
+                className="text-lg px-8 py-3 cursor-pointer"
                 onClick={() => router.push("/polls")}
               >
                 Browse Existing Polls
@@ -153,7 +153,7 @@ export default function Home() {
               <Button
                 size="lg"
                 variant="secondary"
-                className="text-lg px-8 py-3"
+                className="text-lg px-8 py-3 cursor-pointer"
                 onClick={() => router.push("/auth/signup")}
               >
                 Sign Up Free
@@ -161,7 +161,7 @@ export default function Home() {
               <Button
                 variant="outline"
                 size="lg"
-                className="text-lg px-8 py-3 text-white border-white hover:bg-white hover:text-blue-600"
+                className="text-lg px-8 py-3 text-white border-white hover:bg-white hover:text-blue-600 cursor-pointer"
                 onClick={() => router.push("/auth/signin")}
               >
                 Sign In
