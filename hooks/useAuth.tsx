@@ -19,9 +19,11 @@ interface AuthContextType {
   user: User | null;
   isLoading: boolean;
   isAuthenticated: boolean;
+  error: string | null;
   signIn: (credentials: LoginCredentials) => Promise<void>;
   signUp: (credentials: RegisterCredentials) => Promise<void>;
   signOut: () => Promise<void>;
+  clearError: () => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -33,6 +35,7 @@ interface AuthProviderProps {
 export function AuthProvider({ children }: AuthProviderProps) {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const { data: authListener } = supabase.auth.onAuthStateChange(
@@ -49,33 +52,69 @@ export function AuthProvider({ children }: AuthProviderProps) {
   }, []);
 
   const signIn = async (credentials: LoginCredentials) => {
-    const { error } = await supabase.auth.signInWithPassword(credentials);
-    if (error) {
-      throw error;
+    setIsLoading(true);
+    setError(null);
+    try {
+      const { error } = await supabase.auth.signInWithPassword(credentials);
+      if (error) {
+        setError(error.message);
+        throw error;
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Sign in failed");
+      throw err;
+    } finally {
+      setIsLoading(false);
     }
   };
 
   const signUp = async (credentials: RegisterCredentials) => {
-    const { error } = await supabase.auth.signUp(credentials);
-    if (error) {
-      throw error;
+    setIsLoading(true);
+    setError(null);
+    try {
+      const { error } = await supabase.auth.signUp(credentials);
+      if (error) {
+        setError(error.message);
+        throw error;
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Sign up failed");
+      throw err;
+    } finally {
+      setIsLoading(false);
     }
   };
 
   const signOut = async () => {
-    const { error } = await supabase.auth.signOut();
-    if (error) {
-      throw error;
+    setIsLoading(true);
+    setError(null);
+    try {
+      const { error } = await supabase.auth.signOut();
+      if (error) {
+        setError(error.message);
+        throw error;
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Sign out failed");
+      throw err;
+    } finally {
+      setIsLoading(false);
     }
+  };
+
+  const clearError = () => {
+    setError(null);
   };
 
   const value: AuthContextType = {
     user,
     isLoading,
     isAuthenticated: !!user,
+    error,
     signIn,
     signUp,
     signOut,
+    clearError,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
