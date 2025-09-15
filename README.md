@@ -56,7 +56,7 @@ polls/
 │   │   └── create-poll-form.tsx
 │   └── navigation.tsx           # Main navigation
 ├── hooks/                       # Custom React hooks
-│   └── useAuth.ts              # Authentication hook
+│   └── useAuth.tsx             # Authentication hook
 ├── lib/                         # Utility libraries
 │   └── utils.ts                # Utility functions
 ├── types/                       # TypeScript type definitions

@@ -8,18 +8,14 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { LoginCredentials } from "@/types"
+import { useAuth } from "@/hooks/useAuth"
 
-interface SignInFormProps {
-  onSubmit?: (credentials: LoginCredentials) => Promise<void>
-}
-
-export function SignInForm({ onSubmit }: SignInFormProps) {
+export function SignInForm() {
   const [formData, setFormData] = useState<LoginCredentials>({
     email: "",
     password: "",
   })
-  const [isLoading, setIsLoading] = useState(false)
-  const [error, setError] = useState<string>("")
+  const { signIn, isLoading, error } = useAuth()
   const router = useRouter()
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -32,24 +28,8 @@ export function SignInForm({ onSubmit }: SignInFormProps) {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    setError("")
-    setIsLoading(true)
-
-    try {
-      if (onSubmit) {
-        await onSubmit(formData)
-      } else {
-        // Default sign-in logic - replace with your auth implementation
-        console.log("Sign in attempt:", formData)
-        // Simulate API call
-        await new Promise(resolve => setTimeout(resolve, 1000))
-        router.push("/dashboard")
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "An error occurred during sign in")
-    } finally {
-      setIsLoading(false)
-    }
+    await signIn(formData)
+    router.push("/dashboard")
   }
 
   return (

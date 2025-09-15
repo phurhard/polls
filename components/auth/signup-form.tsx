@@ -8,75 +8,26 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { RegisterCredentials } from "@/types"
+import { useAuth } from "@/hooks/useAuth"
 
-interface SignUpFormProps {
-  onSubmit?: (credentials: RegisterCredentials) => Promise<void>
-}
-
-export function SignUpForm({ onSubmit }: SignUpFormProps) {
+export function SignUpForm() {
   const [formData, setFormData] = useState<RegisterCredentials>({
     email: "",
     password: "",
     name: "",
   })
-  const [confirmPassword, setConfirmPassword] = useState("")
-  const [isLoading, setIsLoading] = useState(false)
-  const [error, setError] = useState<string>("")
+  const { signUp, isLoading, error } = useAuth()
   const router = useRouter()
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target
-    if (name === "confirmPassword") {
-      setConfirmPassword(value)
-    } else {
-      setFormData(prev => ({
-        ...prev,
-        [name]: value
-      }))
-    }
+    setFormData(prev => ({
+      ...prev,
+      [name]: value
+    }))
   }
 
-  const validateForm = (): string | null => {
-    if (formData.password.length < 6) {
-      return "Password must be at least 6 characters long"
-    }
-    if (formData.password !== confirmPassword) {
-      return "Passwords do not match"
-    }
-    if (!formData.name.trim()) {
-      return "Name is required"
-    }
-    return null
-  }
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setError("")
-
-    const validationError = validateForm()
-    if (validationError) {
-      setError(validationError)
-      return
-    }
-
-    setIsLoading(true)
-
-    try {
-      if (onSubmit) {
-        await onSubmit(formData)
-      } else {
-        // Default sign-up logic - replace with your auth implementation
-        console.log("Sign up attempt:", formData)
-        // Simulate API call
-        await new Promise(resolve => setTimeout(resolve, 1000))
-        router.push("/dashboard")
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "An error occurred during sign up")
-    } finally {
-      setIsLoading(false)
-    }
-  }
+  const handleSubmit = async (e: React.FormE
 
   return (
     <Card className="w-full max-w-md mx-auto">
