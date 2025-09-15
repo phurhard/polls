@@ -79,14 +79,9 @@ CREATE TABLE public.votes (
     user_id UUID REFERENCES public.users(id) ON DELETE CASCADE NOT NULL,
     poll_id UUID REFERENCES public.polls(id) ON DELETE CASCADE NOT NULL,
     option_id UUID REFERENCES public.poll_options(id) ON DELETE CASCADE NOT NULL,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL
 
-    -- Ensure option belongs to the poll
-    CONSTRAINT votes_option_belongs_to_poll CHECK (
-        option_id IN (
-            SELECT id FROM public.poll_options WHERE poll_id = votes.poll_id
-        )
-    )
+    -- Note: Option-poll relationship enforced by foreign key and trigger instead of check constraint
 );
 
 -- =====================================================
@@ -233,6 +228,27 @@ $$ LANGUAGE plpgsql;
 CREATE TRIGGER validate_vote_trigger
     BEFORE INSERT ON public.votes
     FOR EACH ROW EXECUTE FUNCTION public.validate_vote();
+
+-- Function to ensure vote option belongs to the poll
+CREATE OR REPLACE FUNCTION public.validate_option_poll_relationship()
+RETURNS TRIGGER AS $$
+BEGIN
+    -- Check if the option belongs to the specified poll
+    IF NOT EXISTS (
+        SELECT 1 FROM public.poll_options
+        WHERE id = NEW.option_id AND poll_id = NEW.poll_id
+    ) THEN
+        RAISE EXCEPTION 'Option does not belong to the specified poll';
+    END IF;
+
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Trigger to validate option-poll relationship
+CREATE TRIGGER validate_option_poll_relationship_trigger
+    BEFORE INSERT OR UPDATE ON public.votes
+    FOR EACH ROW EXECUTE FUNCTION public.validate_option_poll_relationship();
 
 -- =====================================================
 -- VIEWS FOR COMMON QUERIES
@@ -484,6 +500,7 @@ ON CONFLICT (name) DO NOTHING;
    - Voting on inactive/expired polls
    - Multiple votes (when not allowed)
    - Invalid data through constraints
+   - Vote options not belonging to the poll
 
 3. Functions provide:
    - Automatic user profile creation
