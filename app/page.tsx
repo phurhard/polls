@@ -73,7 +73,7 @@ export default function Home() {
               <Button
                 size="lg"
                 className="text-lg px-8 py-3 cursor-pointer"
-                <Button onClick={() => router.push("/polls/create")} className="cursor-pointer">
+                onClick={() => router.push("/polls/create")}
               >
                 Create Your First Poll
               </Button>
