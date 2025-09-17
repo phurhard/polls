@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
 import { PollCard } from "@/components/polls/poll-card";
 import { Button } from "@/components/ui/button";
 import {
