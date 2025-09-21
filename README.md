@@ -14,6 +14,8 @@ AI is also used to generate documentation and test cases for the application.
 - **Real-time Voting**: Vote on polls and see results update
 - **Responsive Design**: Works seamlessly on desktop and mobile
 - **Dark Mode Ready**: Built with Shadcn/ui for consistent theming
+- **Accessibility**: Built with accessibility in mind
+- **SEO**: Built with SEO in mind
 
 ## 🛠 Tech Stack
 
