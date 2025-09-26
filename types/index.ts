@@ -1,120 +1,45 @@
-export interface User {
-  id: string;
-  email: string;
-  name: string;
-  createdAt: Date;
-  updatedAt: Date;
-}
+// Re-export all unified types as the primary interface
+// This maintains backward compatibility while using the new unified type system
 
-export interface Poll {
-  id: string;
-  title: string;
-  description?: string;
-  creatorId: string;
-  creator?: User;
-  options: PollOption[];
-  isActive: boolean;
-  allowMultipleChoices: boolean;
-  expiresAt?: Date;
-  createdAt: Date;
-  updatedAt: Date;
-  _count?: {
-    votes: number;
-  };
-}
+export {
+  // Core types
+  User,
+  Poll,
+  PollOption,
+  Vote,
 
-export interface PollOption {
-  id: string;
-  pollId: string;
-  text: string;
-  order: number;
-  votes: Vote[];
-  _count?: {
-    votes: number;
-  };
-}
+  // Form and API types
+  CreatePollData,
+  UpdatePollData,
+  VoteData,
+  PollFilters,
 
-export interface Vote {
-  id: string;
-  userId: string;
-  user?: User;
-  pollId: string;
-  poll?: Poll;
-  optionId: string;
-  option?: PollOption;
-  createdAt: Date;
-}
+  // Authentication types
+  AuthUser,
+  LoginCredentials,
+  RegisterCredentials,
 
-export interface CreatePollData {
-  title: string;
-  description?: string;
-  options: string[];
-  allowMultipleChoices?: boolean;
-  expiresAt?: Date;
-}
+  // API response types
+  ApiResponse,
+  PaginatedResponse,
 
-export interface UpdatePollData {
-  title?: string;
-  description?: string;
-  isActive?: boolean;
-  expiresAt?: Date;
-}
+  // Extended types with statistics
+  PollWithStats,
+  PollOptionWithStats,
 
-export interface VoteData {
-  optionIds: string[];
-}
+  // Transformation utilities
+  transformDbUser,
+  transformDbPoll,
+  transformDbPollOption,
+  transformDbVote,
+  transformCreatePollData,
+  transformVoteData,
+  transformPollFilters,
+} from './unified'
 
-export interface AuthUser {
-  id: string;
-  email: string;
-  name: string;
-}
-
-export interface LoginCredentials {
-  email: string;
-  password: string;
-}
-
-export interface RegisterCredentials {
-  email: string;
-  password: string;
-  name: string;
-}
-
-export interface PollWithStats extends Poll {
-  totalVotes: number;
-  userVotes?: Vote[];
-  hasUserVoted: boolean;
-}
-
-export interface PollOptionWithStats extends PollOption {
-  voteCount: number;
-  percentage: number;
-}
-
-export interface ApiResponse<T> {
-  success: boolean;
-  data?: T;
-  error?: string;
-  message?: string;
-}
-
-export interface PaginatedResponse<T> {
-  data: T[];
-  pagination: {
-    page: number;
-    limit: number;
-    total: number;
-    totalPages: number;
-    hasNext: boolean;
-    hasPrev: boolean;
-  };
-}
-
-export interface PollFilters {
-  status?: 'active' | 'expired' | 'all';
-  creatorId?: string;
-  search?: string;
-  sortBy?: 'createdAt' | 'updatedAt' | 'title' | 'votes';
-  sortOrder?: 'asc' | 'desc';
-}
+// Legacy exports for backward compatibility
+// These will be deprecated in future versions
+export type { User as LegacyUser } from './unified'
+export type { Poll as LegacyPoll } from './unified'
+export type { PollOption as LegacyPollOption } from './unified'
+export type { Vote as LegacyVote } from './unified'

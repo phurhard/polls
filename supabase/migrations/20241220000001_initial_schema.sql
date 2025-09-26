@@ -79,7 +79,7 @@ CREATE TABLE public.votes (
     user_id UUID REFERENCES public.users(id) ON DELETE CASCADE NOT NULL,
     poll_id UUID REFERENCES public.polls(id) ON DELETE CASCADE NOT NULL,
     option_id UUID REFERENCES public.poll_options(id) ON DELETE CASCADE NOT NULL,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL,
 
     -- Note: Option-poll relationship enforced by foreign key and trigger instead of check constraint
 );

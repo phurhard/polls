@@ -1,6 +1,5 @@
 "use client";
 
-import * as React from "react";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
@@ -78,10 +77,10 @@ export function SignInForm() {
         <div className="w-16 h-16 bg-gradient-to-br from-blue-600 to-purple-700 rounded-2xl mx-auto mb-4 flex items-center justify-center shadow-lg">
           <div className="text-2xl font-bold text-white">P</div>
         </div>
-        <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
+        <h1 className="text-3xl font-bold text-foreground mb-2">
           Welcome back
         </h1>
-        <p className="text-gray-600 dark:text-gray-400">
+        <p className="text-muted-foreground">
           Sign in to your account to continue
         </p>
       </div>
@@ -213,10 +212,10 @@ export function SignInForm() {
             {/* Divider */}
             <div className="relative">
               <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-gray-200 dark:border-gray-700"></div>
+                <div className="w-full border-t border-border"></div>
               </div>
               <div className="relative flex justify-center text-sm">
-                <span className="px-4 bg-white dark:bg-gray-900 text-gray-500 dark:text-gray-400">
+                <span className="px-4 bg-background text-muted-foreground">
                   Don&apos;t have an account?
                 </span>
               </div>
@@ -226,7 +225,7 @@ export function SignInForm() {
             <Button
               type="button"
               variant="outline"
-              className="w-full h-12 text-base font-semibold border-2 border-gray-200 dark:border-gray-700 hover:border-blue-500 hover:text-blue-600 dark:hover:text-blue-400 transition-all duration-200"
+              className="w-full h-12 text-base font-semibold border-2 hover:border-primary hover:text-primary transition-all duration-200"
               onClick={() => router.push("/auth/signup")}
               disabled={isLoading}
             >

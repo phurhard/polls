@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { CreatePollData, Poll, ApiResponse } from "@/types";
+import { createPoll } from "@/lib/database";
 
 export async function POST(request: NextRequest) {
   try {

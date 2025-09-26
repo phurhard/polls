@@ -1,13 +1,15 @@
-polls/tests/unit/createPoll.test.js
-```
-```js
 import { createPoll } from '@/lib/database';
 import { supabase } from '@/tests/__mocks__/supabaseClient';
+import { CreatePollData } from '@/types';
 
-// Mock data
-const mockPollData = {
+// Mock data using unified types
+const mockPollData: CreatePollData = {
   title: "New Poll",
+  description: "Test poll description",
   options: ["Option 1", "Option 2"],
+  allowMultipleChoices: false,
+  expiresAt: null,
+  categoryId: null,
 };
 
 jest.mock('@/lib/database', () => ({
@@ -35,7 +37,7 @@ describe('Create Poll Unit Tests', () => {
   });
 
   test('should return an error if the poll title is missing', async () => {
-    const invalidPollData = { ...mockPollData, title: '' };
+    const invalidPollData: CreatePollData = { ...mockPollData, title: '' };
 
     const result = await createPoll(invalidPollData, 'mock-user-id');
 
@@ -45,7 +47,7 @@ describe('Create Poll Unit Tests', () => {
   });
 
   test('should return an error if less than 2 options are provided', async () => {
-    const invalidPollData = { ...mockPollData, options: ['Only one option'] };
+    const invalidPollData: CreatePollData = { ...mockPollData, options: ['Only one option'] };
 
     const result = await createPoll(invalidPollData, 'mock-user-id');
 
@@ -55,7 +57,7 @@ describe('Create Poll Unit Tests', () => {
   });
 
   test('should return an error if duplicate options are provided', async () => {
-    const invalidPollData = { ...mockPollData, options: ['Option 1', 'Option 1'] };
+    const invalidPollData: CreatePollData = { ...mockPollData, options: ['Option 1', 'Option 1'] };
 
     const result = await createPoll(invalidPollData, 'mock-user-id');
 

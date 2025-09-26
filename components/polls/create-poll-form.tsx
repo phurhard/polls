@@ -1,6 +1,5 @@
 "use client"
 
-import * as React from "react"
 import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
@@ -270,8 +269,10 @@ export function CreatePollForm({ onSubmit, initialData }: CreatePollFormProps) {
 
           {/* Error Message */}
           {error && (
-            <div className="text-sm text-red-600 bg-red-50 p-3 rounded-md">
-              {error}
+            <div className="flex items-center gap-2 p-4 bg-destructive/10 border border-destructive/20 rounded-lg">
+              <span className="text-sm text-destructive">
+                {error}
+              </span>
             </div>
           )}
 

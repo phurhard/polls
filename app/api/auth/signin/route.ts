@@ -29,6 +29,9 @@ export async function POST(request: NextRequest) {
         id: '1',
         email: email,
         name: 'Demo User',
+        avatarUrl: null,
+        bio: null,
+        isActive: true,
         createdAt: new Date('2024-01-01'),
         updatedAt: new Date(),
       }

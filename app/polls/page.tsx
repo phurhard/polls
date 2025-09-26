@@ -9,9 +9,6 @@ import { Badge } from "@/components/ui/badge";
 import {
   Card,
   CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
 } from "@/components/ui/card";
 import { Poll, PollFilters, ApiResponse } from "@/types";
 import { useRouter } from "next/navigation";
@@ -87,8 +84,8 @@ export default function PollsPage() {
     // Sorting
     if (filters.sortBy) {
       filtered.sort((a, b) => {
-        let aValue: any;
-        let bValue: any;
+        let aValue: string | number;
+        let bValue: string | number;
 
         switch (filters.sortBy) {
           case "title":
@@ -121,7 +118,7 @@ export default function PollsPage() {
     setFilteredPolls(filtered);
   }, [polls, filters]);
 
-  const handleFilterChange = (key: keyof PollFilters, value: any) => {
+  const handleFilterChange = (key: keyof PollFilters, value: string | number | boolean | null) => {
     setFilters((prev) => ({
       ...prev,
       [key]: value,
@@ -160,13 +157,13 @@ export default function PollsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-background">
       <div className="max-w-6xl mx-auto py-8 px-4">
         {/* Header */}
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900">All Polls</h1>
-            <p className="text-gray-600 mt-2">
+            <h1 className="text-3xl font-bold text-foreground">All Polls</h1>
+            <p className="text-muted-foreground mt-2">
               Discover and participate in community polls
             </p>
           </div>
@@ -270,7 +267,7 @@ export default function PollsPage() {
         {filteredPolls.length === 0 ? (
           <Card>
             <CardContent className="p-12 text-center">
-              <div className="text-gray-500 mb-4">
+              <div className="text-muted-foreground mb-4">
                 {filters.search || filters.status !== "all" ? (
                   <>No polls found matching your filters</>
                 ) : (

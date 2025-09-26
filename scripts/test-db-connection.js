@@ -10,7 +10,33 @@
  */
 
 const { createClient } = require("@supabase/supabase-js");
-require("dotenv").config({ path: ".env.local" });
+
+// Load environment variables manually (avoiding dotenv dependency)
+function loadEnvFile() {
+  const fs = require('fs');
+  const path = require('path');
+
+  const envPath = path.join(process.cwd(), '.env.local');
+
+  if (fs.existsSync(envPath)) {
+    const envContent = fs.readFileSync(envPath, 'utf8');
+    const lines = envContent.split('\n');
+
+    lines.forEach(line => {
+      const trimmed = line.trim();
+      if (trimmed && !trimmed.startsWith('#')) {
+        const [key, ...valueParts] = trimmed.split('=');
+        if (key && valueParts.length > 0) {
+          const value = valueParts.join('=').replace(/^["']|["']$/g, '');
+          process.env[key] = value;
+        }
+      }
+    });
+  }
+}
+
+// Load environment variables
+loadEnvFile();
 
 // Colors for console output
 const colors = {

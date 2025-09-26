@@ -3,31 +3,36 @@ import {
   Database,
   DbPoll,
   DbPollWithRelations,
-  DbPollOption,
-  DbVote,
   DbUser,
-  DbPollInsert,
   DbPollOptionInsert,
   DbVoteInsert,
-  PollFilters,
   CreatePollForm,
   VoteForm,
   DatabaseResponse,
   DatabaseListResponse,
   PollResults
 } from '@/types/database'
+import {
+  Poll,
+  PollFilters,
+  transformDbPoll,
+  transformDbPollOption,
+  transformDbUser,
+  ApiResponse
+} from '@/types'
+
+import { supabaseConfig } from './config'
 
 // Initialize Supabase client
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-
-export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey)
-
-// Service role client for server-side operations
-export const supabaseAdmin = createClient<Database>(
-  supabaseUrl,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
+export const supabase = createClient<Database>(
+  supabaseConfig.url,
+  supabaseConfig.anonKey
 )
+
+// Service role client for server-side operations (only if service role key is available)
+export const supabaseAdmin = supabaseConfig.serviceRoleKey
+  ? createClient<Database>(supabaseConfig.url, supabaseConfig.serviceRoleKey)
+  : null
 
 // =====================================================
 // USER OPERATIONS
@@ -286,6 +291,101 @@ export async function getPolls(
   return { data: pollsWithRelations, error: null, count }
 }
 
+// =====================================================
+// UNIFIED FRONTEND API FUNCTIONS
+// =====================================================
+
+/**
+ * Unified function to get polls with proper type transformation
+ * Returns frontend-compatible Poll objects
+ */
+export async function getPollsUnified(
+  filters: PollFilters = {},
+  userId?: string
+): Promise<ApiResponse<Poll[]>> {
+  try {
+    const dbFilters = transformPollFilters(filters)
+    const result = await getPolls(dbFilters, userId)
+
+    if (result.error) {
+      return {
+        success: false,
+        error: result.error.message || 'Failed to fetch polls'
+      }
+    }
+
+    const transformedPolls = (result.data || []).map(dbPoll => {
+      const options = dbPoll.options.map(transformDbPollOption)
+      const poll = transformDbPoll(dbPoll, options)
+
+      // Add creator if available
+      if (dbPoll.creator) {
+        poll.creator = transformDbUser(dbPoll.creator)
+      }
+
+      // Add vote count
+      if (dbPoll._count) {
+        poll._count = { votes: dbPoll._count.votes }
+      }
+
+      return poll
+    })
+
+    return {
+      success: true,
+      data: transformedPolls
+    }
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error occurred'
+    }
+  }
+}
+
+/**
+ * Unified function to get a single poll with proper type transformation
+ */
+export async function getPollUnified(
+  pollId: string,
+  userId?: string
+): Promise<ApiResponse<Poll>> {
+  try {
+    const result = await getPoll(pollId, userId)
+
+    if (result.error || !result.data) {
+      return {
+        success: false,
+        error: result.error?.message || 'Poll not found'
+      }
+    }
+
+    const dbPoll = result.data
+    const options = dbPoll.options.map(transformDbPollOption)
+    const poll = transformDbPoll(dbPoll, options)
+
+    // Add creator if available
+    if (dbPoll.creator) {
+      poll.creator = transformDbUser(dbPoll.creator)
+    }
+
+    // Add vote count
+    if (dbPoll._count) {
+      poll._count = { votes: dbPoll._count.votes }
+    }
+
+    return {
+      success: true,
+      data: poll
+    }
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error occurred'
+    }
+  }
+}
+
 /**
  * Update poll
  */
@@ -438,7 +538,7 @@ export async function hasUserVoted(
 export async function getUserVotes(
   pollId: string,
   userId: string
-): Promise<DatabaseResponse<any[]>> {
+): Promise<DatabaseResponse<PollResults>> {
   const { data, error } = await supabase.rpc('get_user_votes', {
     poll_uuid: pollId,
     user_uuid: userId
@@ -473,7 +573,7 @@ export async function getPollCategories() {
  */
 export function subscribeToPoll(
   pollId: string,
-  callback: (payload: any) => void
+  callback: (payload: unknown) => void
 ) {
   return supabase
     .channel(`poll:${pollId}`)
@@ -505,7 +605,7 @@ export function subscribeToPoll(
  */
 export function subscribeToUserPolls(
   userId: string,
-  callback: (payload: any) => void
+  callback: (payload: unknown) => void
 ) {
   return supabase
     .channel(`user-polls:${userId}`)

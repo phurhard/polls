@@ -1,7 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createPoll, getPolls } from '@/lib/database'
+import { createPoll, getPollsUnified } from '@/lib/database'
 import { supabase } from '@/lib/database'
-import { CreatePollForm, PollFilters } from '@/types/database'
+import { CreatePollForm } from '@/types/database'
+import {
+  ApiResponse,
+  Poll,
+  PollFilters
+} from '@/types'
 
 export async function POST(request: NextRequest) {
   try {
@@ -81,13 +86,20 @@ export async function POST(request: NextRequest) {
     }
 
     return NextResponse.json(
-      { data: poll, message: 'Poll created successfully' },
+      {
+        success: true,
+        data: poll,
+        message: 'Poll created successfully'
+      } as ApiResponse<typeof poll>,
       { status: 201 }
     )
   } catch (error) {
     console.error('API Error:', error)
     return NextResponse.json(
-      { error: 'Internal server error' },
+      {
+        success: false,
+        error: 'Internal server error'
+      } as ApiResponse<null>,
       { status: 500 }
     )
   }
@@ -112,30 +124,51 @@ export async function GET(request: NextRequest) {
       offset: parseInt(searchParams.get('offset') || '0'),
     }
 
-    const { data: polls, error: fetchError, count } = await getPolls(filters, user?.id)
+    // Convert to frontend filters and use unified API
+    const frontendFilters: PollFilters = {
+      status: filters.status,
+      categoryId: filters.category_id,
+      creatorId: filters.creator_id,
+      search: filters.search,
+      sortBy: filters.sort_by === 'total_votes' ? 'totalVotes' :
+              filters.sort_by === 'created_at' ? 'createdAt' :
+              filters.sort_by === 'updated_at' ? 'updatedAt' :
+              filters.sort_by,
+      sortOrder: filters.sort_order,
+      limit: filters.limit,
+      offset: filters.offset
+    }
 
-    if (fetchError) {
-      console.error('Polls fetch error:', fetchError)
+    const result = await getPollsUnified(frontendFilters, user?.id)
+
+    if (!result.success) {
       return NextResponse.json(
-        { error: fetchError.message || 'Failed to fetch polls' },
+        {
+          success: false,
+          error: result.error || 'Failed to fetch polls'
+        } as ApiResponse<null>,
         { status: 500 }
       )
     }
 
     return NextResponse.json({
-      data: polls || [],
+      success: true,
+      data: result.data || [],
       pagination: {
-        total: count || 0,
+        total: result.data?.length || 0,
         limit: filters.limit || 20,
         offset: filters.offset || 0,
-        hasNext: (count || 0) > (filters.offset || 0) + (filters.limit || 20),
+        hasNext: (result.data?.length || 0) === (filters.limit || 20),
         hasPrev: (filters.offset || 0) > 0,
       }
-    })
+    } as ApiResponse<Poll[]>)
   } catch (error) {
     console.error('API Error:', error)
     return NextResponse.json(
-      { error: 'Internal server error' },
+      {
+        success: false,
+        error: 'Internal server error'
+      } as ApiResponse<null>,
       { status: 500 }
     )
   }
