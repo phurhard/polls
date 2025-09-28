@@ -196,7 +196,7 @@ export default function Home() {
               </a>
             </div>
             <div className="mt-6 pt-6 border-t border-gray-800 text-sm text-gray-500">
-              © 2024 Polls App. All rights reserved.
+              © {new Date().getFullYear()} Polls App. All rights reserved.
             </div>
           </div>
         </div>
