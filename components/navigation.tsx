@@ -1,44 +1,44 @@
-"use client"
+"use client";
 
-import * as React from "react"
-import { useState } from "react"
-import { useRouter } from "next/navigation"
-import Link from "next/link"
-import { Button } from "@/components/ui/button"
-import { Card, CardContent } from "@/components/ui/card"
+import * as React from "react";
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import Link from "next/link";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
 
 interface NavigationProps {
   currentUser?: {
-    id: string
-    name: string
-    email: string
-  } | null
+    id: string;
+    name: string;
+    email: string;
+  } | null;
 }
 
 export function Navigation({ currentUser }: NavigationProps) {
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
-  const router = useRouter()
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const router = useRouter();
 
   const handleSignOut = () => {
     // TODO: Implement actual sign out logic
-    console.log("Signing out...")
-    router.push("/auth/signin")
-  }
+    console.log("Signing out...");
+    router.push("/auth/signin");
+  };
 
   const navItems = [
     { href: "/polls", label: "Browse Polls" },
     { href: "/polls/create", label: "Create Poll" },
-  ]
+  ];
 
   const authenticatedNavItems = [
     { href: "/dashboard", label: "Dashboard" },
     ...navItems,
-  ]
+  ];
 
-  const currentNavItems = currentUser ? authenticatedNavItems : navItems
+  const currentNavItems = currentUser ? authenticatedNavItems : navItems;
 
   return (
-    <nav className="bg-white border-b border-gray-200 sticky top-0 z-50">
+    <nav className="bg-white border-b box-shadow-sm border-gray-200 sticky top-0 z-50">
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center h-16">
           {/* Logo/Brand */}
@@ -57,7 +57,7 @@ export function Navigation({ currentUser }: NavigationProps) {
               <Link
                 key={item.href}
                 href={item.href}
-                className="text-gray-600 hover:text-gray-900 px-3 py-2 text-sm font-medium transition-colors"
+                className="text-gray-600 hover:text-gray-900 hover:underline px-3 py-2 text-sm font-medium transition-colors"
               >
                 {item.label}
               </Link>
@@ -83,7 +83,7 @@ export function Navigation({ currentUser }: NavigationProps) {
             ) : (
               <div className="flex items-center space-x-3">
                 <Button
-                  variant="ghost"
+                  variant="secondary"
                   size="sm"
                   onClick={() => router.push("/auth/signin")}
                 >
@@ -102,7 +102,7 @@ export function Navigation({ currentUser }: NavigationProps) {
           {/* Mobile menu button */}
           <div className="md:hidden">
             <Button
-              variant="ghost"
+              variant="secondary"
               size="sm"
               onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
             >
@@ -165,8 +165,8 @@ export function Navigation({ currentUser }: NavigationProps) {
                           size="sm"
                           className="w-full"
                           onClick={() => {
-                            handleSignOut()
-                            setIsMobileMenuOpen(false)
+                            handleSignOut();
+                            setIsMobileMenuOpen(false);
                           }}
                         >
                           Sign Out
@@ -175,12 +175,12 @@ export function Navigation({ currentUser }: NavigationProps) {
                     ) : (
                       <div className="space-y-2">
                         <Button
-                          variant="ghost"
+                          variant="secondary"
                           size="sm"
                           className="w-full"
                           onClick={() => {
-                            router.push("/auth/signin")
-                            setIsMobileMenuOpen(false)
+                            router.push("/auth/signin");
+                            setIsMobileMenuOpen(false);
                           }}
                         >
                           Sign In
@@ -189,8 +189,8 @@ export function Navigation({ currentUser }: NavigationProps) {
                           size="sm"
                           className="w-full"
                           onClick={() => {
-                            router.push("/auth/signup")
-                            setIsMobileMenuOpen(false)
+                            router.push("/auth/signup");
+                            setIsMobileMenuOpen(false);
                           }}
                         >
                           Sign Up
@@ -205,5 +205,5 @@ export function Navigation({ currentUser }: NavigationProps) {
         )}
       </div>
     </nav>
-  )
+  );
 }
