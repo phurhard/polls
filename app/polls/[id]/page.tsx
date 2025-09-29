@@ -3,6 +3,7 @@ import Link from "next/link"
 import { getPollUnified } from "@/lib/database"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import VotePanel from "@/components/polls/vote-panel"
 
 type PageProps = {
   params: { id: string }
@@ -41,17 +42,12 @@ export default async function PollDetailPage({ params }: PageProps) {
             </div>
 
             <div className="space-y-3">
-              <h3 className="text-sm font-medium text-foreground">Options</h3>
-              <ul className="space-y-2">
-                {poll.options.map((opt) => (
-                  <li
-                    key={opt.id}
-                    className="flex items-center justify-between rounded-md border border-input bg-card px-3 py-2"
-                  >
-                    <span className="text-foreground">{opt.text}</span>
-                  </li>
-                ))}
-              </ul>
+              <h3 className="text-sm font-medium text-foreground">Vote</h3>
+              <VotePanel
+                pollId={poll.id}
+                allowMultipleChoices={poll.allowMultipleChoices}
+                options={poll.options.map((o) => ({ id: o.id, text: o.text }))}
+              />
             </div>
 
             <div className="flex items-center justify-between pt-2">
