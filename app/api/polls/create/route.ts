@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { CreatePollData, Poll, ApiResponse } from "@/types";
-import { createPoll } from "@/lib/database";
+import { CreatePollData, Poll, ApiResponse, transformDbPoll, transformDbPollOption, transformDbUser } from "@/types";
+import { supabase, createPollWithClient } from "@/lib/database";
+import { createClient } from "@supabase/supabase-js";
+import { supabaseConfig } from "@/lib/config";
 
 export async function POST(request: NextRequest) {
   try {
@@ -11,6 +13,20 @@ export async function POST(request: NextRequest) {
         {
           success: false,
           error: "Authentication required",
+        } as ApiResponse<null>,
+        { status: 401 },
+      );
+    }
+    const token = authHeader.replace("Bearer ", "").trim();
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser(token);
+    if (authError || !user) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Invalid or expired token",
         } as ApiResponse<null>,
         { status: 401 },
       );
@@ -76,19 +92,33 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Extract user ID from JWT token (this portion figures what will extract JWT)
-    const userId = "Extracted user id from JWT";
+    // Extract user ID from validated JWT token
+    const userId = user.id;
 
-    // Create poll using the database function
-    const { data: poll, error: createError } = await createPoll(
+    // Create a Supabase client bound to the user's JWT so RLS sees auth.uid()
+    const tokenClient = createClient(supabaseConfig.url, supabaseConfig.anonKey, {
+      global: {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      },
+      auth: {
+        persistSession: false,
+        detectSessionInUrl: false,
+      },
+    });
+
+    // Create poll using the token-bound client to satisfy RLS (creator_id = auth.uid())
+    const { data: poll, error: createError } = await createPollWithClient(
       {
         title: title.trim(),
-        description: description?.trim() || null,
+        description: description?.trim() || undefined,
         options: options.map((optionText) => optionText.trim()),
         allow_multiple_choices: allowMultipleChoices || false,
         expires_at: expiresAt ? new Date(expiresAt) : null,
       },
       userId,
+      tokenClient
     );
 
     if (createError) {
@@ -102,9 +132,19 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Transform DB poll shape to unified frontend Poll
+    const optionsUnified = (poll?.options || []).map(transformDbPollOption);
+    const unified = poll ? transformDbPoll(poll as any, optionsUnified) : undefined;
+    if (unified && poll?.creator) {
+      unified.creator = transformDbUser(poll.creator);
+    }
+    if (unified && poll?._count) {
+      unified._count = { votes: poll._count.votes };
+    }
+
     return NextResponse.json({
       success: true,
-      data: poll,
+      data: unified,
       message: "Poll created successfully",
     } as ApiResponse<Poll>);
   } catch (error) {

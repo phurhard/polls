@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from "react";
 import { PollCard } from "@/components/polls/poll-card";
-import { getPolls } from "@/lib/database";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -10,7 +9,7 @@ import {
   Card,
   CardContent,
 } from "@/components/ui/card";
-import { Poll, PollFilters, ApiResponse } from "@/types";
+import { Poll, PollFilters } from "@/types";
 import { useRouter } from "next/navigation";
 
 export default function PollsPage() {
@@ -25,15 +24,19 @@ export default function PollsPage() {
   });
   const router = useRouter();
 
-  // Load polls (mock data for now)
+  // Load polls via API (no-store to avoid stale cache)
   useEffect(() => {
     const loadPolls = async () => {
       try {
-        const response: ApiResponse<Poll[]> = await getPolls();
-        if (response.success && response.data) {
-          setPolls(response.data);
+        const res = await fetch(
+          "/api/polls?status=all&sort_by=updated_at&sort_order=desc",
+          { cache: "no-store" }
+        );
+        const json = await res.json();
+        if (res.ok && json?.success && Array.isArray(json.data)) {
+          setPolls(json.data as Poll[]);
         } else {
-          console.error("Failed to fetch polls:", response.error);
+          console.error("Failed to fetch polls:", json?.error);
         }
       } catch (error) {
         console.error("Failed to load polls:", error);
@@ -92,7 +95,7 @@ export default function PollsPage() {
             aValue = a.title.toLowerCase();
             bValue = b.title.toLowerCase();
             break;
-          case "votes":
+          case "totalVotes":
             aValue = a._count?.votes || 0;
             bValue = b._count?.votes || 0;
             break;
@@ -254,8 +257,8 @@ export default function PollsPage() {
                   <option value="createdAt-asc">Oldest First</option>
                   <option value="title-asc">Title A-Z</option>
                   <option value="title-desc">Title Z-A</option>
-                  <option value="votes-desc">Most Voted</option>
-                  <option value="votes-asc">Least Voted</option>
+                  <option value="totalVotes-desc">Most Voted</option>
+                  <option value="totalVotes-asc">Least Voted</option>
                   <option value="updatedAt-desc">Recently Updated</option>
                 </select>
               </div>

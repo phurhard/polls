@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { CreatePollData } from "@/types"
+import { supabase } from "@/lib/database"
 
 interface CreatePollFormProps {
   onSubmit?: (pollData: CreatePollData) => Promise<void>
@@ -106,11 +107,43 @@ export function CreatePollForm({ onSubmit, initialData }: CreatePollFormProps) {
       if (onSubmit) {
         await onSubmit(cleanedData)
       } else {
-        // Default create poll logic - replace with your API implementation
-        console.log("Create poll attempt:", cleanedData)
-        // Simulate API call
-        await new Promise(resolve => setTimeout(resolve, 1000))
-        router.push("/dashboard")
+        // Get current session token
+        const { data: { session } } = await supabase.auth.getSession()
+        const token = session?.access_token
+        if (!token) {
+          setError("You must be signed in to create a poll")
+          return
+        }
+
+        // Call API to create poll
+        const res = await fetch("/api/polls/create", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            title: cleanedData.title,
+            description: cleanedData.description || undefined,
+            options: cleanedData.options,
+            allowMultipleChoices: !!cleanedData.allowMultipleChoices,
+            expiresAt: cleanedData.expiresAt ? new Date(cleanedData.expiresAt).toISOString() : undefined,
+            categoryId: (cleanedData as any).categoryId || undefined,
+          }),
+        })
+
+        const json = await res.json()
+        if (!res.ok || !json?.success) {
+          setError(json?.error || "Failed to create poll")
+          return
+        }
+
+        const created = json.data
+        if (created?.id) {
+          router.push(`/polls/${created.id}`)
+        } else {
+          router.push("/dashboard")
+        }
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "An error occurred while creating the poll")
@@ -162,13 +195,13 @@ export function CreatePollForm({ onSubmit, initialData }: CreatePollFormProps) {
               name="description"
               className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
               placeholder="Add more context to help people understand your poll..."
-              value={formData.description}
+              value={formData.description ?? ""}
               onChange={handleInputChange}
               disabled={isLoading}
               maxLength={500}
             />
             <div className="text-xs text-muted-foreground">
-              {formData.description.length}/500 characters
+              {(formData.description ?? "").length}/500 characters
             </div>
           </div>
 
@@ -250,7 +283,7 @@ export function CreatePollForm({ onSubmit, initialData }: CreatePollFormProps) {
                 id="expiresAt"
                 name="expiresAt"
                 type="datetime-local"
-                value={formatDateTimeLocal(formData.expiresAt)}
+                value={formatDateTimeLocal(formData.expiresAt ?? undefined)}
                 onChange={(e) => {
                   const value = e.target.value
                   setFormData(prev => ({
