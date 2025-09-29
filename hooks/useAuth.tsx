@@ -19,6 +19,8 @@ interface AuthContextType {
   signUp: (credentials: RegisterCredentials) => Promise<void>;
   signOut: () => Promise<void>;
   clearError: () => void;
+  requestPasswordReset: (email: string) => Promise<void>;
+  updatePassword: (newPassword: string) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -97,6 +99,42 @@ export function AuthProvider({ children }: AuthProviderProps) {
     }
   };
 
+  const requestPasswordReset = async (email: string) => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/auth/reset-password`,
+      });
+      if (error) {
+        setError(error.message);
+        throw error;
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Password reset email failed");
+      throw err;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const updatePassword = async (newPassword: string) => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const { error } = await supabase.auth.updateUser({ password: newPassword });
+      if (error) {
+        setError(error.message);
+        throw error;
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Password update failed");
+      throw err;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const clearError = () => {
     setError(null);
   };
@@ -110,6 +148,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
     signUp,
     signOut,
     clearError,
+    requestPasswordReset,
+    updatePassword,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

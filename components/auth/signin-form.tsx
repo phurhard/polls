@@ -181,9 +181,9 @@ export function SignInForm() {
             <div className="text-right">
               <button
                 type="button"
-                className="text-sm text-primary hover:text-primary/80 font-medium transition-colors"
+                className="text-sm text-primary hover:text-primary/80 font-medium transition-colors cursor-pointer"
                 onClick={() => {
-                  /* TODO: Implement forgot password */
+                  router.push("/auth/forgot-password");
                 }}
               >
                 Forgot your password?
@@ -194,7 +194,7 @@ export function SignInForm() {
             <Button
               type="submit"
               disabled={isLoading}
-              className="w-full h-12 text-base font-semibold bg-gradient-to-r from-blue-600 to-purple-700 hover:from-blue-700 hover:to-purple-800 transition-all duration-200 transform hover:scale-[1.02] disabled:transform-none disabled:opacity-70 shadow-lg hover:shadow-xl"
+              className="w-full h-12 text-base font-semibold bg-gradient-to-r from-blue-600 to-purple-700 hover:from-blue-700 hover:to-purple-800 transition-all duration-200 transform hover:scale-[1.02] disabled:transform-none disabled:opacity-70 shadow-lg hover:shadow-xl cursor-pointer"
             >
               {isLoading ? (
                 <div className="flex items-center gap-2">
@@ -225,7 +225,7 @@ export function SignInForm() {
             <Button
               type="button"
               variant="outline"
-              className="w-full h-12 text-base font-semibold border-2 hover:border-primary hover:text-primary transition-all duration-200"
+              className="w-full h-12 text-base font-semibold border-2 hover:border-primary hover:text-primary transition-all duration-200 cursor-pointer"
               onClick={() => router.push("/auth/signup")}
               disabled={isLoading}
             >

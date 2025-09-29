@@ -13,6 +13,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Poll, User } from "@/types";
+import { useRouter } from "next/navigation";
 
 // Mock data - replace with actual API calls
 const mockUser: User = {
