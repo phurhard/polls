@@ -4,6 +4,7 @@
 import { 
   DbPoll, 
   DbPollOption, 
+  DbPollOptionWithStats,
   DbVote, 
   DbUser, 
   DbPollWithRelations,
@@ -209,8 +210,10 @@ export function transformDbPoll(dbPoll: DbPoll, options: PollOption[] = []): Pol
 /**
  * Transform database poll option to frontend poll option
  */
-export function transformDbPollOption(dbOption: DbPollOption): PollOption {
-  return {
+export function transformDbPollOption(
+  dbOption: DbPollOption | DbPollOptionWithStats
+): PollOption {
+  const base: PollOption = {
     id: dbOption.id,
     pollId: dbOption.poll_id,
     text: dbOption.text,
@@ -218,6 +221,13 @@ export function transformDbPollOption(dbOption: DbPollOption): PollOption {
     createdAt: new Date(dbOption.created_at),
     updatedAt: new Date(dbOption.updated_at),
   }
+
+  // If coming from the stats view, attach _count.votes so UI can compute percentages
+  if ('vote_count' in dbOption && typeof (dbOption as any).vote_count === 'number') {
+    (base as any)._count = { votes: (dbOption as any).vote_count }
+  }
+
+  return base
 }
 
 /**
@@ -239,11 +249,11 @@ export function transformDbVote(dbVote: DbVote): Vote {
 export function transformCreatePollData(data: CreatePollData): DbCreatePollForm {
   return {
     title: data.title,
-    description: data.description || null,
+    description: data.description ?? undefined,
     options: data.options,
     allow_multiple_choices: data.allowMultipleChoices || false,
-    expires_at: data.expiresAt || null,
-    category_id: data.categoryId || null,
+    expires_at: data.expiresAt ?? undefined,
+    category_id: data.categoryId ?? null,
   }
 }
 
