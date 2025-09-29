@@ -1,6 +1,9 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { ThemeToggle } from "@/components/theme-toggle";
+import { Poll, User, transformDbUser } from "@/types";
 import { PollCard } from "@/components/polls/poll-card";
 import { Button } from "@/components/ui/button";
 import {
@@ -11,132 +14,62 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { ThemeToggle } from "@/components/theme-toggle";
-import { Poll, User } from "@/types";
-import { useRouter } from "next/navigation";
-
-// Mock data - replace with actual API calls
-const mockUser: User = {
-  id: "user1",
-  name: "John Doe",
-  email: "john@example.com",
-  createdAt: new Date("2024-01-01"),
-  updatedAt: new Date("2024-01-01"),
-};
-
-const mockUserPolls: Poll[] = [
-  {
-    id: "1",
-    title: "What's your favorite programming language?",
-    description:
-      "Help us understand the community's preferences for programming languages in 2024.",
-    creatorId: "user1",
-    creator: mockUser,
-    isActive: true,
-    allowMultipleChoices: false,
-    createdAt: new Date("2024-01-15"),
-    updatedAt: new Date("2024-01-15"),
-    options: [
-      {
-        id: "opt1",
-        pollId: "1",
-        text: "JavaScript",
-        order: 0,
-        votes: [],
-        _count: { votes: 45 },
-      },
-      {
-        id: "opt2",
-        pollId: "1",
-        text: "Python",
-        order: 1,
-        votes: [],
-        _count: { votes: 38 },
-      },
-      {
-        id: "opt3",
-        pollId: "1",
-        text: "TypeScript",
-        order: 2,
-        votes: [],
-        _count: { votes: 32 },
-      },
-      {
-        id: "opt4",
-        pollId: "1",
-        text: "Go",
-        order: 3,
-        votes: [],
-        _count: { votes: 15 },
-      },
-    ],
-    _count: { votes: 130 },
-  },
-  {
-    id: "3",
-    title: "Office lunch preferences",
-    description:
-      "What type of food should we order for next week's team lunch?",
-    creatorId: "user1",
-    creator: mockUser,
-    isActive: false,
-    allowMultipleChoices: false,
-    expiresAt: new Date("2024-01-20"),
-    createdAt: new Date("2024-01-05"),
-    updatedAt: new Date("2024-01-20"),
-    options: [
-      {
-        id: "opt8",
-        pollId: "3",
-        text: "Pizza",
-        order: 0,
-        votes: [],
-        _count: { votes: 18 },
-      },
-      {
-        id: "opt9",
-        pollId: "3",
-        text: "Chinese",
-        order: 1,
-        votes: [],
-        _count: { votes: 22 },
-      },
-      {
-        id: "opt10",
-        pollId: "3",
-        text: "Mexican",
-        order: 2,
-        votes: [],
-        _count: { votes: 15 },
-      },
-      {
-        id: "opt11",
-        pollId: "3",
-        text: "Sandwiches",
-        order: 3,
-        votes: [],
-        _count: { votes: 9 },
-      },
-    ],
-    _count: { votes: 64 },
-  },
-];
+import { supabase, getUserProfile, getPollsUnified, deletePoll } from "@/lib/database";
 
 export default function DashboardPage() {
   const [user, setUser] = useState<User | null>(null);
   const [userPolls, setUserPolls] = useState<Poll[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const router = useRouter();
 
   useEffect(() => {
     const loadDashboardData = async () => {
+      setIsLoading(true);
+      setLoadError(null);
+
       try {
-        // Simulate API calls
-        await new Promise((resolve) => setTimeout(resolve, 1000));
-        setUser(mockUser);
-        setUserPolls(mockUserPolls);
+        // 1) Get current auth user
+        const { data: auth } = await supabase.auth.getUser();
+        const authUser = auth?.user;
+        if (!authUser) {
+          setUser(null);
+          setUserPolls([]);
+          return;
+        }
+
+        // 2) Fetch profile from DB and transform to unified User
+        const { data: dbUser, error: profileError } = await getUserProfile(authUser.id);
+        if (profileError || !dbUser) {
+          setLoadError(profileError?.message || "Failed to load user profile");
+          setUser(null);
+          setUserPolls([]);
+          return;
+        }
+        const unifiedUser = transformDbUser(dbUser);
+        setUser(unifiedUser);
+
+        // 3) Fetch user's polls (unified)
+        const pollsRes = await getPollsUnified(
+          {
+            creatorId: unifiedUser.id,
+            sortBy: "updatedAt",
+            sortOrder: "desc",
+            status: "all",
+          },
+          unifiedUser.id
+        );
+
+        if (!pollsRes.success) {
+          setLoadError(pollsRes.error || "Failed to load polls");
+          setUserPolls([]);
+          return;
+        }
+
+        setUserPolls(pollsRes.data || []);
       } catch (error) {
-        console.error("Failed to load dashboard data:", error);
+        setLoadError(error instanceof Error ? error.message : "Failed to load dashboard data");
+        setUserPolls([]);
       } finally {
         setIsLoading(false);
       }
@@ -150,9 +83,13 @@ export default function DashboardPage() {
   };
 
   const handleDeletePoll = async (pollId: string) => {
+    if (!user) return;
     try {
-      // Simulate API call
-      console.log("Deleting poll:", pollId);
+      const { error } = await deletePoll(pollId, user.id);
+      if (error) {
+        console.error("Failed to delete poll:", error);
+        return;
+      }
       setUserPolls((prev) => prev.filter((poll) => poll.id !== pollId));
     } catch (error) {
       console.error("Failed to delete poll:", error);
@@ -192,7 +129,7 @@ export default function DashboardPage() {
           <Card>
             <CardContent className="p-12">
               <div className="text-destructive mb-4">
-                Failed to load user data
+                {loadError ? loadError : "You must be signed in to view your dashboard."}
               </div>
               <Button onClick={() => router.push("/auth/signin")}>
                 Sign In
@@ -204,14 +141,14 @@ export default function DashboardPage() {
     );
   }
 
-  const activePolls = userPolls.filter((poll) => {
+  const activePollsCount = userPolls.filter((poll) => {
     const isExpired = poll.expiresAt && new Date(poll.expiresAt) < new Date();
     return poll.isActive && !isExpired;
   }).length;
 
   const totalVotes = userPolls.reduce(
     (sum, poll) => sum + (poll._count?.votes || 0),
-    0,
+    0
   );
 
   return (
@@ -249,7 +186,7 @@ export default function DashboardPage() {
                 {userPolls.length}
               </div>
               <div className="text-xs text-muted-foreground mt-1">
-                {activePolls} active, {userPolls.length - activePolls} inactive
+                {activePollsCount} active, {userPolls.length - activePollsCount} inactive
               </div>
             </CardContent>
           </Card>
@@ -305,10 +242,7 @@ export default function DashboardPage() {
               </Button>
               <Button
                 variant="outline"
-                onClick={() => {
-                  // Navigate to profile/settings when implemented
-                  console.log("Navigate to settings");
-                }}
+                onClick={() => router.push("/dashboard")} // placeholder for account settings page
               >
                 Account Settings
               </Button>
@@ -326,10 +260,7 @@ export default function DashboardPage() {
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => {
-                  // Navigate to user's polls page when implemented
-                  console.log("View all user polls");
-                }}
+                onClick={() => router.push("/polls")}
               >
                 View All
               </Button>
@@ -383,7 +314,7 @@ export default function DashboardPage() {
           )}
         </div>
 
-        {/* Recent Activity - Placeholder for future implementation */}
+        {/* Recent Activity (left as an empty section until implemented with a feed) */}
         {userPolls.length > 0 && (
           <Card className="mt-8 bg-card border-border">
             <CardHeader>
