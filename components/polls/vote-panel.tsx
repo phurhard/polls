@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/database";
 import { Button } from "@/components/ui/button";
@@ -11,14 +11,36 @@ type VotePanelProps = {
   pollId: string;
   allowMultipleChoices: boolean;
   options: { id: string; text: string }[];
+  isActive: boolean;
+  isExpired: boolean;
 };
 
-export function VotePanel({ pollId, allowMultipleChoices, options }: VotePanelProps) {
+export function VotePanel({ pollId, allowMultipleChoices, options, isActive, isExpired }: VotePanelProps) {
   const router = useRouter();
   const [selected, setSelected] = useState<string[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
+  const disabled = isExpired || !isActive;
+
+  // Prefill selection with user's existing votes
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) return;
+        const { data, error: votesErr } = await supabase.rpc('get_user_votes', { poll_uuid: pollId } as any);
+        if (!votesErr && Array.isArray(data)) {
+          const optionIds = (data as any[]).map((v: any) => v.option_id);
+          if (!cancelled) setSelected(optionIds);
+        }
+      } catch {
+        // ignore
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [pollId]);
 
   const toggleSelection = (optionId: string) => {
     if (allowMultipleChoices) {
@@ -32,6 +54,7 @@ export function VotePanel({ pollId, allowMultipleChoices, options }: VotePanelPr
 
   const submitVote = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (disabled) return;
     setError(null);
     setSuccessMsg(null);
 
@@ -81,8 +104,43 @@ export function VotePanel({ pollId, allowMultipleChoices, options }: VotePanelPr
     }
   };
 
+  const handleClearVotes = async () => {
+    setError(null);
+    setSuccessMsg(null);
+    setIsSubmitting(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        setError("You must be signed in to clear your vote.");
+        return;
+      }
+      // RLS restricts delete to own votes
+      const { error: delErr } = await supabase
+        .from("votes")
+        .delete()
+        .eq("poll_id", pollId);
+
+      if (delErr) {
+        setError(delErr.message || "Failed to remove vote(s).");
+        return;
+      }
+      setSelected([]);
+      setSuccessMsg("Your vote(s) were removed.");
+      router.refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to remove vote(s).");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   return (
     <form onSubmit={submitVote} className="space-y-4">
+      {disabled && (
+        <div className="text-sm text-muted-foreground">
+          {!isActive ? "Voting is disabled because this poll is inactive." : "Voting is disabled because this poll has expired."}
+        </div>
+      )}
       <div className="space-y-3">
         {options.map((opt) => (
           <label key={opt.id} className="flex items-center gap-3 rounded-md border border-input bg-card px-3 py-2 cursor-pointer">
@@ -92,6 +150,7 @@ export function VotePanel({ pollId, allowMultipleChoices, options }: VotePanelPr
               checked={selected.includes(opt.id)}
               onChange={() => toggleSelection(opt.id)}
               className="h-4 w-4"
+              disabled={disabled || isSubmitting}
             />
             <span className="text-foreground">{opt.text}</span>
           </label>
@@ -109,10 +168,20 @@ export function VotePanel({ pollId, allowMultipleChoices, options }: VotePanelPr
         </div>
       )}
 
-      <div className="pt-2">
-        <Button type="submit" disabled={isSubmitting} className="cursor-pointer">
+      <div className="pt-2 flex gap-2">
+        <Button type="submit" disabled={isSubmitting || disabled} className="cursor-pointer">
           {isSubmitting ? "Submitting..." : "Submit Vote"}
         </Button>
+        {selected.length > 0 && !disabled && (
+          <Button
+            type="button"
+            variant="outline"
+            disabled={isSubmitting}
+            onClick={handleClearVotes}
+          >
+            Clear my vote(s)
+          </Button>
+        )}
       </div>
 
       <div className="text-xs text-muted-foreground">

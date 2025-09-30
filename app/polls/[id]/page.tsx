@@ -50,6 +50,8 @@ export default async function PollDetailPage({ params }: PageProps) {
                 pollId={poll.id}
                 allowMultipleChoices={poll.allowMultipleChoices}
                 options={poll.options.map((o) => ({ id: o.id, text: o.text }))}
+                isActive={poll.isActive}
+                isExpired={isExpired}
               />
             </div>
 

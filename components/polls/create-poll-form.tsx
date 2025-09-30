@@ -116,7 +116,7 @@ export function CreatePollForm({ onSubmit, initialData }: CreatePollFormProps) {
         }
 
         // Call API to create poll
-        const res = await fetch("/api/polls/create", {
+        const res = await fetch("/api/polls", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",

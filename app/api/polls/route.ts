@@ -1,86 +1,106 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createPoll, getPollsUnified } from '@/lib/database'
+import { getPollsUnified, createPollWithClient } from '@/lib/database'
 import { supabase } from '@/lib/database'
-import { CreatePollForm } from '@/types/database'
+import { createClient } from '@supabase/supabase-js'
+import { supabaseConfig } from '@/lib/config'
 import {
   ApiResponse,
   Poll,
-  PollFilters
+  PollFilters,
+  CreatePollData
 } from '@/types'
 
 export async function POST(request: NextRequest) {
   try {
-    // Get the current user
-    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    const authHeader = request.headers.get('authorization')
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return NextResponse.json(
+        { success: false, error: 'Authentication required' } as ApiResponse<null>,
+        { status: 401 }
+      )
+    }
+    const token = authHeader.replace('Bearer ', '').trim()
 
+    const { data: { user }, error: authError } = await supabase.auth.getUser(token)
     if (authError || !user) {
       return NextResponse.json(
-        { error: 'Authentication required' },
+        { success: false, error: 'Invalid or expired token' } as ApiResponse<null>,
         { status: 401 }
       )
     }
 
-    const body = await request.json()
-    const pollData: CreatePollForm = body
+    const body: CreatePollData = await request.json()
+    const { title, description, options, allowMultipleChoices, expiresAt, categoryId } = body
 
-    // Validate required fields
-    if (!pollData.title?.trim()) {
+    // Validate input
+    if (!title || !title.trim()) {
       return NextResponse.json(
-        { error: 'Poll title is required' },
+        { success: false, error: 'Poll title is required' } as ApiResponse<null>,
         { status: 400 }
       )
     }
 
-    if (!pollData.options || pollData.options.length < 2) {
+    if (!options || options.length < 2) {
       return NextResponse.json(
-        { error: 'At least 2 options are required' },
+        { success: false, error: 'At least 2 options are required' } as ApiResponse<null>,
         { status: 400 }
       )
     }
 
-    // Filter out empty options
-    const validOptions = pollData.options.filter(opt => opt.trim())
-    if (validOptions.length < 2) {
+    if (options.length > 10) {
       return NextResponse.json(
-        { error: 'At least 2 non-empty options are required' },
+        { success: false, error: 'Maximum 10 options allowed' } as ApiResponse<null>,
         { status: 400 }
       )
     }
 
-    // Check for duplicate options
-    const uniqueOptions = new Set(validOptions.map(opt => opt.trim().toLowerCase()))
-    if (uniqueOptions.size !== validOptions.length) {
+    const cleanedOptions = options.map(opt => opt.trim()).filter(Boolean)
+    if (cleanedOptions.length < 2) {
       return NextResponse.json(
-        { error: 'All options must be unique' },
+        { success: false, error: 'At least 2 non-empty options are required' } as ApiResponse<null>,
         { status: 400 }
       )
     }
 
-    // Validate expiry date
-    if (pollData.expires_at && new Date(pollData.expires_at) <= new Date()) {
+    const unique = new Set(cleanedOptions.map(opt => opt.toLowerCase()))
+    if (unique.size !== cleanedOptions.length) {
       return NextResponse.json(
-        { error: 'Expiry date must be in the future' },
+        { success: false, error: 'All options must be unique' } as ApiResponse<null>,
         { status: 400 }
       )
     }
 
-    // Create the poll
-    const { data: poll, error: createError } = await createPoll(
+    if (expiresAt && new Date(expiresAt) <= new Date()) {
+      return NextResponse.json(
+        { success: false, error: 'Expiry date must be in the future' } as ApiResponse<null>,
+        { status: 400 }
+      )
+    }
+
+    // Create a Supabase client bound to the user's token so RLS uses auth.uid()
+    const tokenClient = createClient(supabaseConfig.url, supabaseConfig.anonKey, {
+      global: { headers: { Authorization: `Bearer ${token}` } },
+      auth: { persistSession: false, detectSessionInUrl: false },
+    })
+
+    // Create poll using token-bound client
+    const { data: poll, error: createError } = await createPollWithClient(
       {
-        title: pollData.title.trim(),
-        description: pollData.description?.trim() || null,
-        options: validOptions,
-        allow_multiple_choices: pollData.allow_multiple_choices || false,
-        expires_at: pollData.expires_at ? new Date(pollData.expires_at) : null,
-        category_id: pollData.category_id || null,
+        title: title.trim(),
+        description: description?.trim() || undefined,
+        options: cleanedOptions,
+        allow_multiple_choices: allowMultipleChoices || false,
+        expires_at: expiresAt ? new Date(expiresAt) : null,
+        category_id: categoryId || null,
       },
-      user.id
+      user.id,
+      tokenClient
     )
 
     if (createError) {
       console.error('Poll creation error:', createError)
       return NextResponse.json(
-        { error: createError.message || 'Failed to create poll' },
+        { success: false, error: createError.message || 'Failed to create poll' } as ApiResponse<null>,
         { status: 500 }
       )
     }
@@ -96,10 +116,7 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error('API Error:', error)
     return NextResponse.json(
-      {
-        success: false,
-        error: 'Internal server error'
-      } as ApiResponse<null>,
+      { success: false, error: 'Internal server error' } as ApiResponse<null>,
       { status: 500 }
     )
   }
@@ -113,30 +130,28 @@ export async function GET(request: NextRequest) {
     const { data: { user } } = await supabase.auth.getUser()
 
     // Parse query parameters
-    const filters: PollFilters = {
-      status: searchParams.get('status') as 'active' | 'expired' | 'inactive' | 'all' || 'active',
-      category_id: searchParams.get('category_id') || undefined,
-      creator_id: searchParams.get('creator_id') || undefined,
-      search: searchParams.get('search') || undefined,
-      sort_by: searchParams.get('sort_by') as 'created_at' | 'updated_at' | 'title' | 'total_votes' || 'created_at',
-      sort_order: searchParams.get('sort_order') as 'asc' | 'desc' || 'desc',
-      limit: parseInt(searchParams.get('limit') || '20'),
-      offset: parseInt(searchParams.get('offset') || '0'),
-    }
+    const status = (searchParams.get('status') as 'active' | 'expired' | 'inactive' | 'all') || 'active'
+    const categoryId = searchParams.get('category_id') || undefined
+    const creatorId = searchParams.get('creator_id') || undefined
+    const search = searchParams.get('search') || undefined
+    const sortByDb = (searchParams.get('sort_by') as 'created_at' | 'updated_at' | 'title' | 'total_votes') || 'created_at'
+    const sortOrder = (searchParams.get('sort_order') as 'asc' | 'desc') || 'desc'
+    const limit = parseInt(searchParams.get('limit') || '20')
+    const offset = parseInt(searchParams.get('offset') || '0')
 
     // Convert to frontend filters and use unified API
     const frontendFilters: PollFilters = {
-      status: filters.status,
-      categoryId: filters.category_id,
-      creatorId: filters.creator_id,
-      search: filters.search,
-      sortBy: filters.sort_by === 'total_votes' ? 'totalVotes' :
-              filters.sort_by === 'created_at' ? 'createdAt' :
-              filters.sort_by === 'updated_at' ? 'updatedAt' :
-              filters.sort_by,
-      sortOrder: filters.sort_order,
-      limit: filters.limit,
-      offset: filters.offset
+      status,
+      categoryId,
+      creatorId,
+      search,
+      sortBy: sortByDb === 'total_votes' ? 'totalVotes' :
+              sortByDb === 'created_at' ? 'createdAt' :
+              sortByDb === 'updated_at' ? 'updatedAt' :
+              sortByDb,
+      sortOrder,
+      limit,
+      offset
     }
 
     const result = await getPollsUnified(frontendFilters, user?.id)
@@ -156,10 +171,10 @@ export async function GET(request: NextRequest) {
       data: result.data || [],
       pagination: {
         total: result.data?.length || 0,
-        limit: filters.limit || 20,
-        offset: filters.offset || 0,
-        hasNext: (result.data?.length || 0) === (filters.limit || 20),
-        hasPrev: (filters.offset || 0) > 0,
+        limit: limit || 20,
+        offset: offset || 0,
+        hasNext: (result.data?.length || 0) === (limit || 20),
+        hasPrev: (offset || 0) > 0,
       }
     } as ApiResponse<Poll[]>)
   } catch (error) {
