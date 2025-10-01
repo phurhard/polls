@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/card";
 import { Poll, PollFilters } from "@/types";
 import { useRouter } from "next/navigation";
+import { supabase } from "@/lib/database";
 
 export default function PollsPage() {
   const [polls, setPolls] = useState<Poll[]>([]);
@@ -22,104 +23,82 @@ export default function PollsPage() {
     sortBy: "createdAt",
     sortOrder: "desc",
   });
+  const PAGE_LIMIT = 9;
+  const [offset, setOffset] = useState(0);
+  const [hasNext, setHasNext] = useState(true);
+  const [isFetchingMore, setIsFetchingMore] = useState(false);
   const router = useRouter();
 
-  // Load polls via API (no-store to avoid stale cache)
+  type Category = { id: string; name: string; color?: string | null };
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [isLoadingCategories, setIsLoadingCategories] = useState(true);
+
+  // Load categories for filter
   useEffect(() => {
-    const loadPolls = async () => {
+    let cancelled = false;
+    (async () => {
       try {
-        const res = await fetch(
-          "/api/polls?status=all&sort_by=updated_at&sort_order=desc",
-          { cache: "no-store" }
-        );
+        const { data, error } = await supabase
+          .from('poll_categories')
+          .select('id,name,color')
+          .eq('is_active', true)
+          .order('name');
+        if (!cancelled && !error && Array.isArray(data)) {
+          setCategories(data as any);
+        }
+      } finally {
+        if (!cancelled) setIsLoadingCategories(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  // Load polls via API with server-side filters/sort/pagination
+  useEffect(() => {
+    const fetchPage = async () => {
+      setIsLoading(true);
+      try {
+        const params = new URLSearchParams();
+        params.set("status", (filters.status || "all") as string);
+        if (filters.search) params.set("search", filters.search);
+        if (filters.categoryId) params.set("category_id", filters.categoryId);
+        const sortBy =
+          filters.sortBy === "totalVotes" ? "total_votes" :
+          filters.sortBy === "createdAt" ? "created_at" :
+          filters.sortBy === "updatedAt" ? "updated_at" :
+          (filters.sortBy || "created_at");
+        params.set("sort_by", sortBy);
+        params.set("sort_order", filters.sortOrder || "desc");
+        params.set("limit", String(PAGE_LIMIT));
+        params.set("offset", "0");
+
+        const res = await fetch(`/api/polls?${params.toString()}`, { cache: "no-store" });
         const json = await res.json();
         if (res.ok && json?.success && Array.isArray(json.data)) {
           setPolls(json.data as Poll[]);
+          setOffset(0);
+          setHasNext(!!json.pagination?.hasNext);
         } else {
           console.error("Failed to fetch polls:", json?.error);
+          setPolls([]);
+          setHasNext(false);
         }
       } catch (error) {
         console.error("Failed to load polls:", error);
+        setPolls([]);
+        setHasNext(false);
       } finally {
         setIsLoading(false);
       }
     };
 
-    loadPolls();
-  }, []);
+    fetchPage();
+  }, [filters.status, filters.search, filters.sortBy, filters.sortOrder]);
 
-  // Apply filters and sorting
+  // Client-side filtering now simplified (handled by server)
   useEffect(() => {
-    let filtered = [...polls];
-
-    // Status filter
-    if (filters.status !== "all") {
-      filtered = filtered.filter((poll) => {
-        const isExpired =
-          poll.expiresAt && new Date(poll.expiresAt) < new Date();
-        if (filters.status === "active") {
-          return poll.isActive && !isExpired;
-        } else if (filters.status === "expired") {
-          return !poll.isActive || isExpired;
-        }
-        return true;
-      });
-    }
-
-    // Search filter
-    if (filters.search) {
-      const searchLower = filters.search.toLowerCase();
-      filtered = filtered.filter(
-        (poll) =>
-          poll.title.toLowerCase().includes(searchLower) ||
-          poll.description?.toLowerCase().includes(searchLower) ||
-          poll.creator?.name.toLowerCase().includes(searchLower),
-      );
-    }
-
-    // Creator filter
-    if (filters.creatorId) {
-      filtered = filtered.filter(
-        (poll) => poll.creatorId === filters.creatorId,
-      );
-    }
-
-    // Sorting
-    if (filters.sortBy) {
-      filtered.sort((a, b) => {
-        let aValue: string | number;
-        let bValue: string | number;
-
-        switch (filters.sortBy) {
-          case "title":
-            aValue = a.title.toLowerCase();
-            bValue = b.title.toLowerCase();
-            break;
-          case "totalVotes":
-            aValue = a._count?.votes || 0;
-            bValue = b._count?.votes || 0;
-            break;
-          case "updatedAt":
-            aValue = new Date(a.updatedAt).getTime();
-            bValue = new Date(b.updatedAt).getTime();
-            break;
-          case "createdAt":
-          default:
-            aValue = new Date(a.createdAt).getTime();
-            bValue = new Date(b.createdAt).getTime();
-            break;
-        }
-
-        if (filters.sortOrder === "asc") {
-          return aValue < bValue ? -1 : aValue > bValue ? 1 : 0;
-        } else {
-          return aValue > bValue ? -1 : aValue < bValue ? 1 : 0;
-        }
-      });
-    }
-
-    setFilteredPolls(filtered);
-  }, [polls, filters]);
+    setFilteredPolls(polls);
+  }, [polls]);
 
   const handleFilterChange = (key: keyof PollFilters, value: string | number | boolean | null) => {
     setFilters((prev) => ({
@@ -242,6 +221,21 @@ export default function PollsPage() {
                 ))}
               </div>
 
+              {/* Category Filter */}
+              <div className="flex gap-2">
+                <select
+                  value={filters.categoryId || ""}
+                  onChange={(e) => handleFilterChange("categoryId", e.target.value || null)}
+                  className="px-3 py-2 border border-input rounded-md text-sm"
+                  disabled={isLoadingCategories}
+                >
+                  <option value="">All Categories</option>
+                  {categories.map((c) => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+                </select>
+              </div>
+
               {/* Sort */}
               <div className="flex gap-2">
                 <select
@@ -298,16 +292,45 @@ export default function PollsPage() {
         )}
 
         {/* Load More (for pagination) */}
-        {filteredPolls.length >= 9 && (
+        {hasNext && (
           <div className="text-center mt-8">
             <Button
               variant="outline"
-              onClick={() => {
-                // Implement load more functionality
-                console.log("Load more polls...");
+              disabled={isFetchingMore}
+              onClick={async () => {
+                setIsFetchingMore(true);
+                try {
+                  const params = new URLSearchParams();
+                  params.set("status", (filters.status || "all") as string);
+                  if (filters.search) params.set("search", filters.search);
+                  const sortBy =
+                    filters.sortBy === "totalVotes" ? "total_votes" :
+                    filters.sortBy === "createdAt" ? "created_at" :
+                    filters.sortBy === "updatedAt" ? "updated_at" :
+                    (filters.sortBy || "created_at");
+                  if (filters.categoryId) params.set("category_id", filters.categoryId);
+                  params.set("sort_by", sortBy);
+                  params.set("sort_order", filters.sortOrder || "desc");
+                  params.set("limit", String(PAGE_LIMIT));
+                  params.set("offset", String(offset + PAGE_LIMIT));
+
+                  const res = await fetch(`/api/polls?${params.toString()}`, { cache: "no-store" });
+                  const json = await res.json();
+                  if (res.ok && json?.success && Array.isArray(json.data)) {
+                    setPolls(prev => [...prev, ...(json.data as Poll[])]);
+                    setOffset(prev => prev + PAGE_LIMIT);
+                    setHasNext(!!json.pagination?.hasNext);
+                  } else {
+                    setHasNext(false);
+                  }
+                } catch {
+                  setHasNext(false);
+                } finally {
+                  setIsFetchingMore(false);
+                }
               }}
             >
-              Load More Polls
+              {isFetchingMore ? "Loading..." : "Load More Polls"}
             </Button>
           </div>
         )}

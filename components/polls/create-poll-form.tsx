@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -22,10 +22,34 @@ export function CreatePollForm({ onSubmit, initialData }: CreatePollFormProps) {
     options: initialData?.options || ["", ""],
     allowMultipleChoices: initialData?.allowMultipleChoices || false,
     expiresAt: initialData?.expiresAt || undefined,
+    categoryId: (initialData as any)?.categoryId ?? undefined,
   })
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string>("")
   const router = useRouter()
+
+  type Category = { id: string; name: string; color?: string | null }
+  const [categories, setCategories] = useState<Category[]>([])
+  const [isLoadingCategories, setIsLoadingCategories] = useState(true)
+
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      try {
+        const { data, error } = await supabase
+          .from('poll_categories')
+          .select('id,name,color')
+          .eq('is_active', true)
+          .order('name')
+        if (!cancelled && !error && Array.isArray(data)) {
+          setCategories(data as any)
+        }
+      } finally {
+        if (!cancelled) setIsLoadingCategories(false)
+      }
+    })()
+    return () => { cancelled = true }
+  }, [])
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value, type } = e.target
@@ -298,6 +322,29 @@ export function CreatePollForm({ onSubmit, initialData }: CreatePollFormProps) {
                 Leave empty for polls that never expire
               </div>
             </div>
+          </div>
+
+          {/* Category */}
+          <div className="space-y-2">
+            <Label htmlFor="categoryId">Category (Optional)</Label>
+            <select
+              id="categoryId"
+              name="categoryId"
+              value={(formData as any).categoryId || ""}
+              onChange={(e) => {
+                const value = e.target.value || undefined
+                setFormData(prev => ({ ...prev, categoryId: value as any }))
+              }}
+              disabled={isLoading || isLoadingCategories}
+              className="px-3 py-2 border border-input rounded-md text-sm w-full bg-background"
+            >
+              <option value="">No category</option>
+              {categories.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
           </div>
 
           {/* Error Message */}
