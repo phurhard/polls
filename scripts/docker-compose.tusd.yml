@@ -1,0 +1,57 @@
+version: "3.8"
+
+# TUS resumable upload server backed by Cloudflare R2 (S3-compatible)
+# Prereqs:
+# - Fill .env.local with R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_BUCKET_NAME, R2_S3_ENDPOINT
+# - NEXT_PUBLIC_TUS_ENDPOINT should be http://localhost:3000/uploads (Next.js proxy)
+# - TUSD_INTERNAL_URL should be http://localhost:1080 (for Next.js rewrites)
+#
+# Run:
+#   docker compose -f scripts/docker-compose.tusd.yml up -d
+#
+# Test (from host):
+#   curl -H "Tus-Resumable: 1.0.0" -H "Upload-Length: 11" \
+#        -H "Upload-Metadata: filename dGVzdC50eHQ=" \
+#        -X POST http://localhost:1080/files/
+#   # Then PATCH the upload-url returned in Location header.
+
+services:
+  tusd:
+    image: tusproject/tusd:v1.11.0
+    container_name: tusd
+    restart: unless-stopped
+    # Exposes TUS on port 1080
+    ports:
+      - "1080:1080"
+    environment:
+      # Passed-through envs (ensure these exist in your shell or .env file when launching compose)
+      R2_BUCKET_NAME: ${R2_BUCKET_NAME}
+      R2_S3_ENDPOINT: ${R2_S3_ENDPOINT}
+      R2_ACCESS_KEY_ID: ${R2_ACCESS_KEY_ID}
+      R2_SECRET_ACCESS_KEY: ${R2_SECRET_ACCESS_KEY}
+    command: >
+      -host=0.0.0.0
+      -port=1080
+      -base-path=/files/
+      # S3 (R2) backend
+      -s3-bucket=${R2_BUCKET_NAME}
+      -s3-endpoint=${R2_S3_ENDPOINT}
+      -s3-region=auto
+      -s3-access-key-id=${R2_ACCESS_KEY_ID}
+      -s3-secret-access-key=${R2_SECRET_ACCESS_KEY}
+      -s3-object-prefix=uploads/
+      -s3-force-path-style
+      # Deployment behind proxy (Next.js -> tusd)
+      -behind-proxy
+      # Limits and housekeeping
+      -max-size=5368709120
+      -timeout=60s
+      # Optional: hook to application for post-finish (commented)
+      # -hooks-http=http://host.docker.internal:3000/api/tus/hooks
+    # If you need custom DNS or networks:
+    # networks:
+    #   - polls
+
+# networks:
+#   polls:
+#     driver: bridge

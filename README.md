@@ -17,6 +17,20 @@ AI is also used to generate documentation and test cases for the application.
 - **Accessibility**: Built with accessibility in mind
 - **SEO**: Built with SEO in mind
 
+## 🔧 What This Upgrade Adds (MVP)
+- Database-side transactions via Supabase RPCs:
+  - create_poll_tx: atomic poll + options creation under RLS
+  - cast_vote_tx: server-validated voting (active/expired/multi-choice) under RLS
+- Faster, fewer DB roundtrips:
+  - Poll listings batch-load options and user votes (avoids N+1)
+  - API routes call RPCs instead of multiple client-side statements
+- Cloudflare R2 + Tus uploads scaffold:
+  - /uploads proxy, docker-compose for tusd, envs and docs for resumable uploads
+- Files table with RLS to track uploaded objects securely
+- Types extended for RPCs/files to improve DX and future removal of @ts-nocheck
+
+See docs/IMPROVEMENTS_AT_A_GLANCE.md for a quick overview and docs/MVP_IMPROVEMENTS.md for details.
+
 ## 🛠 Tech Stack
 
 - **Framework**: Next.js 15 with App Router

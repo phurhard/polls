@@ -83,63 +83,28 @@ export async function createPoll(
   pollData: CreatePollForm,
   userId: string
 ): Promise<DatabaseResponse<DbPollWithRelations>> {
-  // Start a transaction-like operation
-  const { data: poll, error: pollError } = await supabase
-    .from('polls')
-    .insert({
-      title: pollData.title,
-      description: pollData.description,
-      creator_id: userId,
-      allow_multiple_choices: pollData.allow_multiple_choices || false,
-      expires_at: pollData.expires_at?.toISOString(),
-      category_id: pollData.category_id,
-    } as Database['public']['Tables']['polls']['Insert'])
-    .select('*')
-    .single()
+  // Use transactional RPC to create poll and options under RLS
+  const cleanedOptions = pollData.options.map((t) => t.trim()).filter(Boolean);
 
-  if (pollError || !poll) {
-    return { data: null, error: pollError }
+  const { data: newId, error: rpcError } = await supabase.rpc('create_poll_tx', {
+    p_title: pollData.title.trim(),
+    p_description: pollData.description?.trim() || null,
+    p_options: cleanedOptions,
+    p_allow_multiple: pollData.allow_multiple_choices || false,
+    p_expires_at: pollData.expires_at ? pollData.expires_at.toISOString() : null,
+    p_category_id: pollData.category_id || null,
+  } as any);
+
+  if (rpcError || !newId) {
+    return { data: null, error: rpcError as any };
   }
 
-  // Create poll options
-  const optionsData: DbPollOptionInsert[] = pollData.options.map((text, index) => ({
-    poll_id: poll.id,
-    text: text.trim(),
-    order: index,
-  }))
-
-  const { data: options, error: optionsError } = await supabase
-    .from('poll_options')
-    .insert(optionsData as Database['public']['Tables']['poll_options']['Insert'][])
-    .select('*')
-
-  if (optionsError) {
-    // Cleanup: delete the poll if options creation failed
-    await supabase.from('polls').delete().eq('id', poll.id)
-    return { data: null, error: optionsError }
+  // Fetch the full poll with relations
+  const result = await getPoll(newId as unknown as string, userId);
+  if (result.error || !result.data) {
+    return { data: null, error: result.error };
   }
-
-  // Get creator info
-  const { data: creator } = await supabase
-    .from('users')
-    .select('*')
-    .eq('id', userId)
-    .single()
-
-  // Return poll with relations
-  const pollWithRelations: DbPollWithRelations = {
-    ...poll,
-    creator: creator!,
-    options: (options as any[]).map((option: any) => ({
-      ...option,
-      vote_count: 0,
-      vote_percentage: 0,
-    })),
-    user_votes: [],
-    _count: { votes: 0 }
-  }
-
-  return { data: pollWithRelations, error: null }
+  return { data: result.data, error: null };
 }
 
 export async function createPollWithClient(
@@ -147,56 +112,51 @@ export async function createPollWithClient(
   userId: string,
   client: any
 ): Promise<DatabaseResponse<DbPollWithRelations>> {
-  // Create poll
-  const { data: poll, error: pollError } = await client
-    .from('polls')
-    .insert({
-      title: pollData.title,
-      description: pollData.description,
-      creator_id: userId,
-      allow_multiple_choices: pollData.allow_multiple_choices || false,
-      expires_at: pollData.expires_at?.toISOString(),
-      category_id: pollData.category_id,
-    })
-    .select('*')
-    .single()
+  // Create via transactional RPC bound to user's token (RLS)
+  const cleanedOptions = pollData.options.map((t) => t.trim()).filter(Boolean);
+  const { data: newId, error: rpcError } = await client.rpc('create_poll_tx', {
+    p_title: pollData.title.trim(),
+    p_description: pollData.description?.trim() || null,
+    p_options: cleanedOptions,
+    p_allow_multiple: pollData.allow_multiple_choices || false,
+    p_expires_at: pollData.expires_at ? pollData.expires_at.toISOString() : null,
+    p_category_id: pollData.category_id || null,
+  });
 
-  if (pollError || !poll) {
-    return { data: null, error: pollError }
+  if (rpcError || !newId) {
+    return { data: null, error: rpcError }
   }
 
-  // Create poll options
-  const optionsData: DbPollOptionInsert[] = pollData.options.map((text, index) => ({
-    poll_id: poll.id,
-    text: text.trim(),
-    order: index,
-  }))
-
-  const { data: options, error: optionsError } = await client
-    .from('poll_options')
-    .insert(optionsData)
-    .select('*')
-
-  if (optionsError) {
-    await client.from('polls').delete().eq('id', poll.id)
-    return { data: null, error: optionsError }
-  }
-
-  // Get creator info
+  // Fetch minimal relations
   const { data: creator } = await client
     .from('users')
     .select('*')
     .eq('id', userId)
     .single()
 
+  const { data: poll } = await client
+    .from('polls')
+    .select(`
+      *,
+      category:poll_categories(*)
+    `)
+    .eq('id', newId)
+    .single()
+
+  const { data: options } = await client
+    .from('poll_options_with_stats' as any)
+    .select('*')
+    .eq('poll_id', newId)
+    .order('order')
+
+  if (!poll || !creator) {
+    return { data: null, error: { message: 'Failed to fetch created poll' } as any }
+  }
+
   const pollWithRelations: DbPollWithRelations = {
     ...poll,
     creator: creator!,
-    options: (options as any[]).map((option: any) => ({
-      ...option,
-      vote_count: 0,
-      vote_percentage: 0,
-    })),
+    options: (options as any[]) || [],
     user_votes: [],
     _count: { votes: 0 }
   }
@@ -325,36 +285,48 @@ export async function getPolls(
     return { data: null, error, count: (count ?? undefined) }
   }
 
-  // For each poll, get options and user votes
-  const pollsWithRelations: DbPollWithRelations[] = await Promise.all(
-    ((polls as any[]) || []).map(async (poll) => {
-      // Get options with stats
-      const { data: options } = await supabase
-        .from('poll_options_with_stats' as any)
-        .select('*')
-        .eq('poll_id', poll.id)
-        .order('order')
+  // Batch-load options and user votes to avoid N+1 queries
+  const pollList = ((polls as any[]) || [])
+  const ids = pollList.map((p: any) => p.id)
 
-      // Get user votes if user is provided
-      let userVotes: DbVote[] = []
-      if (userId) {
-        const { data: votes } = await supabase
-          .from('votes')
-          .select('*')
-          .eq('poll_id', poll.id)
-          .eq('user_id', userId)
+  // Options for all polls
+  const optionsByPoll = new Map<string, any[]>()
+  if (ids.length > 0) {
+    const { data: allOptions } = await supabase
+      .from('poll_options_with_stats' as any)
+      .select('*')
+      .in('poll_id', ids)
+      .order('order')
 
-        userVotes = votes || []
-      }
-
-      return {
-        ...poll,
-        options: options || [],
-        user_votes: userVotes,
-        _count: { votes: (poll as any).total_votes }
-      }
+    ;(allOptions || []).forEach((opt: any) => {
+      const arr = optionsByPoll.get(opt.poll_id) || []
+      arr.push(opt)
+      optionsByPoll.set(opt.poll_id, arr)
     })
-  )
+  }
+
+  // User votes for all polls (optional)
+  const userVotesByPoll = new Map<string, DbVote[]>()
+  if (userId && ids.length > 0) {
+    const { data: votesAll } = await supabase
+      .from('votes')
+      .select('*')
+      .eq('user_id', userId)
+      .in('poll_id', ids)
+
+    ;(votesAll || []).forEach((v: any) => {
+      const arr = userVotesByPoll.get(v.poll_id) || []
+      arr.push(v)
+      userVotesByPoll.set(v.poll_id, arr)
+    })
+  }
+
+  const pollsWithRelations: DbPollWithRelations[] = pollList.map((poll: any) => ({
+    ...poll,
+    options: optionsByPoll.get(poll.id) || [],
+    user_votes: userVotesByPoll.get(poll.id) || [],
+    _count: { votes: (poll as any).total_votes }
+  }))
 
   return { data: pollsWithRelations, error: null, count: (count ?? undefined) }
 }
@@ -464,7 +436,7 @@ export async function updatePoll(
 ): Promise<DatabaseResponse<DbPoll>> {
   const { data, error } = await supabase
     .from('polls')
-    .update(updates)
+    .update(updates as Database['public']['Tables']['polls']['Update'])
     .eq('id', pollId)
     .eq('creator_id', userId) // Ensure user owns the poll
     .select()
@@ -501,54 +473,24 @@ export async function castVote(
   voteData: VoteForm,
   userId: string
 ): Promise<DatabaseResponse<DbVote[]>> {
-  // First, get poll info to validate voting rules
-  const { data: poll, error: pollError } = await supabase
-    .from('polls')
-    .select('*')
-    .eq('id', pollId)
-    .single()
+  // Use transactional RPC which enforces rules + triggers
+  const { error } = await supabase.rpc('cast_vote_tx', {
+    poll_uuid: pollId,
+    option_ids: voteData.option_ids
+  } as any)
 
-  if (pollError || !poll) {
-    return { data: null, error: pollError }
+  if (error) {
+    return { data: null, error }
   }
 
-  // Check if poll is active and not expired
-  if (!poll.is_active) {
-    return {
-      data: null,
-      error: { message: 'Poll is not active', code: 'POLL_INACTIVE' }
-    }
-  }
-
-  if (poll.expires_at && new Date(poll.expires_at) < new Date()) {
-    return {
-      data: null,
-      error: { message: 'Poll has expired', code: 'POLL_EXPIRED' }
-    }
-  }
-
-  // If multiple choices not allowed, delete existing votes first
-  if (!poll.allow_multiple_choices) {
-    await supabase
-      .from('votes')
-      .delete()
-      .eq('poll_id', pollId)
-      .eq('user_id', userId)
-  }
-
-  // Create new votes
-  const votesData: DbVoteInsert[] = voteData.option_ids.map(optionId => ({
-    user_id: userId,
-    poll_id: pollId,
-    option_id: optionId,
-  }))
-
-  const { data, error } = await supabase
+  // Return user's votes after casting
+  const { data } = await supabase
     .from('votes')
-    .insert(votesData as Database['public']['Tables']['votes']['Insert'][])
-    .select()
+    .select('*')
+    .eq('poll_id', pollId)
+    .eq('user_id', userId)
 
-  return { data, error }
+  return { data: (data as DbVote[]) || [], error: null }
 }
 
 /**

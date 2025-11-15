@@ -149,6 +149,41 @@ export interface Database {
           created_at?: string
         }
       }
+      files: {
+        Row: {
+          id: string
+          user_id: string | null
+          key: string
+          filename: string
+          size: number
+          mime_type: string | null
+          status: 'uploaded' | 'processing' | 'ready' | 'failed'
+          metadata: any
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          user_id?: string | null
+          key: string
+          filename: string
+          size: number
+          mime_type?: string | null
+          status?: 'uploaded' | 'processing' | 'ready' | 'failed'
+          metadata?: any
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string | null
+          key?: string
+          filename?: string
+          size?: number
+          mime_type?: string | null
+          status?: 'uploaded' | 'processing' | 'ready' | 'failed'
+          metadata?: any
+          created_at?: string
+        }
+      }
     }
     Views: {
       polls_with_stats: {
@@ -225,6 +260,24 @@ export interface Database {
         Args: {}
         Returns: undefined
       }
+      create_poll_tx: {
+        Args: {
+          p_title: string
+          p_description?: string | null
+          p_options: string[]
+          p_allow_multiple?: boolean
+          p_expires_at?: string | null
+          p_category_id?: string | null
+        }
+        Returns: string
+      }
+      cast_vote_tx: {
+        Args: {
+          poll_uuid: string
+          option_ids: string[]
+        }
+        Returns: undefined
+      }
     }
     Enums: {}
   }
@@ -241,6 +294,7 @@ export type DbPoll = Tables<'polls'>
 export type DbPollOption = Tables<'poll_options'>
 export type DbVote = Tables<'votes'>
 export type DbPollCategory = Tables<'poll_categories'>
+export type DbFile = Tables<'files'>
 
 // Insert types
 export type DbUserInsert = TablesInsert<'users'>
@@ -248,6 +302,7 @@ export type DbPollInsert = TablesInsert<'polls'>
 export type DbPollOptionInsert = TablesInsert<'poll_options'>
 export type DbVoteInsert = TablesInsert<'votes'>
 export type DbPollCategoryInsert = TablesInsert<'poll_categories'>
+export type DbFileInsert = TablesInsert<'files'>
 
 // Update types
 export type DbUserUpdate = TablesUpdate<'users'>
@@ -255,6 +310,7 @@ export type DbPollUpdate = TablesUpdate<'polls'>
 export type DbPollOptionUpdate = TablesUpdate<'poll_options'>
 export type DbVoteUpdate = TablesUpdate<'votes'>
 export type DbPollCategoryUpdate = TablesUpdate<'poll_categories'>
+export type DbFileUpdate = TablesUpdate<'files'>
 
 // View types
 export type DbPollWithStats = Database['public']['Views']['polls_with_stats']['Row']

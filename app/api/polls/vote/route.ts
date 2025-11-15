@@ -47,62 +47,15 @@ export async function POST(request: NextRequest) {
       auth: { persistSession: false, detectSessionInUrl: false },
     });
 
-    // Validate poll state and rules
-    const { data: pollRow, error: pollErr } = await client
-      .from("polls")
-      .select("*")
-      .eq("id", pollId)
-      .single();
+    // Use transactional RPC to cast votes under RLS and server-side validations
+    const { error: voteErr } = await client.rpc('cast_vote_tx', {
+      poll_uuid: pollId,
+      option_ids: optionIds,
+    });
 
-    if (pollErr || !pollRow) {
+    if (voteErr) {
       return NextResponse.json(
-        { success: false, error: "Poll not found" },
-        { status: 404 }
-      );
-    }
-
-    // Check poll is active and not expired
-    if (!pollRow.is_active) {
-      return NextResponse.json(
-        { success: false, error: "Poll is not active" },
-        { status: 400 }
-      );
-    }
-    if (pollRow.expires_at && new Date(pollRow.expires_at) < new Date()) {
-      return NextResponse.json(
-        { success: false, error: "Poll has expired" },
-        { status: 400 }
-      );
-    }
-
-    // Enforce multiple choice rule
-    if (!pollRow.allow_multiple_choices && optionIds.length > 1) {
-      return NextResponse.json(
-        { success: false, error: "Multiple selections are not allowed" },
-        { status: 400 }
-      );
-    }
-
-    // If single-choice, delete previous votes for this user on this poll
-    if (!pollRow.allow_multiple_choices) {
-      await client
-        .from("votes")
-        .delete()
-        .eq("poll_id", pollId)
-        .eq("user_id", user.id);
-    }
-
-    // Insert votes (RLS: user_id must equal auth.uid())
-    const votesData = optionIds.map((optId) => ({
-      user_id: user.id,
-      poll_id: pollId,
-      option_id: optId,
-    }));
-
-    const { error: insertErr } = await client.from("votes").insert(votesData);
-    if (insertErr) {
-      return NextResponse.json(
-        { success: false, error: insertErr.message || "Failed to cast vote" },
+        { success: false, error: voteErr.message || "Failed to cast vote" },
         { status: 500 }
       );
     }
