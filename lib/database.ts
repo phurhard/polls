@@ -688,5 +688,160 @@ export function getTimeRemaining(expiresAt: string): {
   return { days, hours, minutes, seconds, total }
 }
 
+// =====================================================
+// ANALYTICS OPERATIONS
+// =====================================================
+
+/**
+ * Get vote timeline for a poll - votes grouped by date
+ */
+export async function getPollVoteTimeline(
+  pollId: string
+): Promise<DatabaseResponse<Array<{ date: string; count: number }>>> {
+  const { data, error } = await supabase
+    .from('votes')
+    .select('created_at')
+    .eq('poll_id', pollId)
+    .order('created_at', { ascending: true })
+
+  if (error) {
+    return { data: null, error }
+  }
+
+  // Group votes by date
+  const votesByDate = new Map<string, number>()
+  data?.forEach((vote) => {
+    const date = new Date(vote.created_at).toLocaleDateString()
+    votesByDate.set(date, (votesByDate.get(date) || 0) + 1)
+  })
+
+  const timeline = Array.from(votesByDate.entries()).map(([date, count]) => ({
+    date,
+    count,
+  }))
+
+  return { data: timeline, error: null }
+}
+
+/**
+ * Get user voting statistics
+ */
+export async function getUserVotingStats(
+  userId: string
+): Promise<DatabaseResponse<{
+  totalVotesCast: number
+  pollsVotedOn: number
+  recentVotes: Array<{
+    pollId: string
+    pollTitle: string
+    votedAt: string
+  }>
+}>> {
+  // Get total votes cast by user
+  const { data: votes, error: votesError } = await supabase
+    .from('votes')
+    .select('poll_id, created_at, polls(id, title)')
+    .eq('user_id', userId)
+    .order('created_at', { ascending: false })
+
+  if (votesError) {
+    return { data: null, error: votesError }
+  }
+
+  // Count unique polls voted on
+  const uniquePolls = new Set(votes?.map((v) => v.poll_id) || [])
+
+  // Get recent votes (last 10)
+  const recentVotes = (votes || []).slice(0, 10).map((vote) => ({
+    pollId: vote.poll_id,
+    pollTitle: (vote.polls as any)?.title || 'Unknown Poll',
+    votedAt: vote.created_at,
+  }))
+
+  return {
+    data: {
+      totalVotesCast: votes?.length || 0,
+      pollsVotedOn: uniquePolls.size,
+      recentVotes,
+    },
+    error: null,
+  }
+}
+
+/**
+ * Get user's created polls statistics
+ */
+export async function getUserPollsStats(
+  userId: string
+): Promise<DatabaseResponse<{
+  totalPollsCreated: number
+  activePolls: number
+  totalVotesReceived: number
+  mostPopularPoll: {
+    id: string
+    title: string
+    voteCount: number
+  } | null
+}>> {
+  // Get all polls created by user with vote counts
+  const { data: polls, error: pollsError } = await supabase
+    .from('polls')
+    .select('id, title, is_active, expires_at')
+    .eq('creator_id', userId)
+
+  if (pollsError) {
+    return { data: null, error: pollsError }
+  }
+
+  // Get vote counts for each poll
+  const pollIds = polls?.map((p) => p.id) || []
+  const { data: votes, error: votesError } = await supabase
+    .from('votes')
+    .select('poll_id')
+    .in('poll_id', pollIds)
+
+  if (votesError) {
+    return { data: null, error: votesError }
+  }
+
+  // Count votes per poll
+  const votesByPoll = new Map<string, number>()
+  votes?.forEach((vote) => {
+    votesByPoll.set(vote.poll_id, (votesByPoll.get(vote.poll_id) || 0) + 1)
+  })
+
+  // Find most popular poll
+  let mostPopularPoll = null
+  let maxVotes = 0
+  polls?.forEach((poll) => {
+    const voteCount = votesByPoll.get(poll.id) || 0
+    if (voteCount > maxVotes) {
+      maxVotes = voteCount
+      mostPopularPoll = {
+        id: poll.id,
+        title: poll.title,
+        voteCount,
+      }
+    }
+  })
+
+  // Count active polls
+  const now = new Date()
+  const activePolls = polls?.filter((poll) => {
+    const isExpired = poll.expires_at && new Date(poll.expires_at) < now
+    return poll.is_active && !isExpired
+  }).length || 0
+
+  return {
+    data: {
+      totalPollsCreated: polls?.length || 0,
+      activePolls,
+      totalVotesReceived: votes?.length || 0,
+      mostPopularPoll,
+    },
+    error: null,
+  }
+}
+
 // Export the main supabase client for direct use when needed
 export default supabase

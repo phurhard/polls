@@ -14,13 +14,23 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { supabase, getUserProfile, getPollsUnified, deletePoll } from "@/lib/database";
+import {
+  supabase,
+  getUserProfile,
+  getPollsUnified,
+  deletePoll,
+  getUserVotingStats,
+  getUserPollsStats
+} from "@/lib/database";
+import { UserAnalytics } from "@/components/dashboard/user-analytics";
 
 export default function DashboardPage() {
   const [user, setUser] = useState<User | null>(null);
   const [userPolls, setUserPolls] = useState<Poll[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [votingStats, setVotingStats] = useState<any>(null);
+  const [pollsStats, setPollsStats] = useState<any>(null);
   const router = useRouter();
 
   useEffect(() => {
@@ -67,6 +77,19 @@ export default function DashboardPage() {
         }
 
         setUserPolls(pollsRes.data || []);
+
+        // 4) Fetch user analytics
+        const [votingStatsRes, pollsStatsRes] = await Promise.all([
+          getUserVotingStats(unifiedUser.id),
+          getUserPollsStats(unifiedUser.id)
+        ]);
+
+        if (votingStatsRes.data) {
+          setVotingStats(votingStatsRes.data);
+        }
+        if (pollsStatsRes.data) {
+          setPollsStats(pollsStatsRes.data);
+        }
       } catch (error) {
         setLoadError(error instanceof Error ? error.message : "Failed to load dashboard data");
         setUserPolls([]);
@@ -314,23 +337,14 @@ export default function DashboardPage() {
           )}
         </div>
 
-        {/* Recent Activity (left as an empty section until implemented with a feed) */}
-        {userPolls.length > 0 && (
-          <Card className="mt-8 bg-card border-border">
-            <CardHeader>
-              <CardTitle className="text-card-foreground">
-                Recent Activity
-              </CardTitle>
-              <CardDescription>
-                Latest votes and interactions on your polls
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="text-center py-8 text-muted-foreground">
-                Recent activity will be displayed here once implemented
-              </div>
-            </CardContent>
-          </Card>
+        {/* User Analytics */}
+        {votingStats && pollsStats && (
+          <div className="mt-8">
+            <h2 className="text-xl font-semibold text-foreground mb-6">
+              Your Analytics
+            </h2>
+            <UserAnalytics votingStats={votingStats} pollsStats={pollsStats} />
+          </div>
         )}
       </div>
     </div>

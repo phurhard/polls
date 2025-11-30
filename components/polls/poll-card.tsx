@@ -36,7 +36,8 @@ export function PollCard({
     "totalVotes" in poll ? poll.totalVotes : poll._count?.votes || 0;
   const hasUserVoted = "hasUserVoted" in poll ? poll.hasUserVoted : false;
 
-  const handleVoteClick = async () => {
+  const handleVoteClick = async (e: React.MouseEvent) => {
+    e.stopPropagation(); // Prevent card click
     if (onVote) {
       setIsLoading(true);
       try {
@@ -49,7 +50,8 @@ export function PollCard({
     }
   };
 
-  const handleEditClick = () => {
+  const handleEditClick = (e: React.MouseEvent) => {
+    e.stopPropagation(); // Prevent card click
     if (onEdit) {
       onEdit(poll.id);
     } else {
@@ -57,7 +59,8 @@ export function PollCard({
     }
   };
 
-  const handleDeleteClick = () => {
+  const handleDeleteClick = (e: React.MouseEvent) => {
+    e.stopPropagation(); // Prevent card click
     if (
       onDelete &&
       window.confirm("Are you sure you want to delete this poll?")
@@ -76,8 +79,15 @@ export function PollCard({
     });
   };
 
+  const handleCardClick = () => {
+    router.push(`/polls/${poll.id}/analytics`);
+  };
+
   return (
-    <Card className="w-full hover:shadow-md transition-shadow bg-card border-border">
+    <Card
+      className="w-full hover:shadow-md transition-shadow bg-card border-border cursor-pointer"
+      onClick={handleCardClick}
+    >
       <CardHeader>
         <div className="flex items-start justify-between">
           <div className="flex-1">
